@@ -615,7 +615,10 @@ static BOOL wined3d_buffer_prepare_location(struct wined3d_buffer *buffer,
                 return TRUE;
 
             if (!wined3d_resource_allocate_sysmem(&buffer->resource))
+            {
+                ERR("Failed to allocate system memory.\n");
                 return FALSE;
+            }
             return TRUE;
 
         case WINED3D_LOCATION_BUFFER:
@@ -1180,6 +1183,8 @@ static void wined3d_buffer_unmap(struct wined3d_buffer *buffer)
         }
 
         GL_EXTCALL(glUnmapBuffer(buffer->buffer_type_hint));
+        if (wined3d_settings.strict_draw_ordering)
+            gl_info->gl_ops.gl.p_glFlush(); /* Flush to ensure ordering across contexts. */
         context_release(context);
 
         buffer_clear_dirty_areas(buffer);
@@ -1275,24 +1280,6 @@ static HRESULT buffer_resource_sub_resource_map(struct wined3d_resource *resourc
     return wined3d_buffer_map(buffer, offset, size, (BYTE **)&map_desc->data, flags);
 }
 
-static HRESULT buffer_resource_sub_resource_map_info(struct wined3d_resource *resource, unsigned int sub_resource_idx,
-        struct wined3d_map_info *info, DWORD flags)
-{
-    struct wined3d_buffer *buffer = buffer_from_resource(resource);
-
-    if (sub_resource_idx)
-    {
-        WARN("Invalid sub_resource_idx %u.\n", sub_resource_idx);
-        return E_INVALIDARG;
-    }
-
-    info->row_pitch   = buffer->desc.byte_width;
-    info->slice_pitch = buffer->desc.byte_width;
-    info->size        = buffer->resource.size;
-
-    return WINED3D_OK;
-}
-
 static HRESULT buffer_resource_sub_resource_unmap(struct wined3d_resource *resource, unsigned int sub_resource_idx)
 {
     if (sub_resource_idx)
@@ -1312,7 +1299,6 @@ static const struct wined3d_resource_ops buffer_resource_ops =
     buffer_resource_preload,
     buffer_unload,
     buffer_resource_sub_resource_map,
-    buffer_resource_sub_resource_map_info,
     buffer_resource_sub_resource_unmap,
 };
 
@@ -1375,9 +1361,6 @@ static HRESULT buffer_init(struct wined3d_buffer *buffer, struct wined3d_device 
     buffer->bind_flags = bind_flags;
     buffer->locations = WINED3D_LOCATION_SYSMEM;
 
-    if (!wined3d_resource_allocate_sysmem(&buffer->resource))
-        return E_OUTOFMEMORY;
-
     TRACE("buffer %p, size %#x, usage %#x, format %s, memory @ %p.\n",
             buffer, buffer->resource.size, buffer->resource.usage,
             debug_d3dformat(buffer->resource.format->id), buffer->resource.heap_memory);
@@ -1426,7 +1409,7 @@ static HRESULT buffer_init(struct wined3d_buffer *buffer, struct wined3d_device 
 
     if (data)
         wined3d_device_update_sub_resource(device, &buffer->resource,
-                0, NULL, data->data, data->row_pitch, data->slice_pitch, 0);
+                0, NULL, data->data, data->row_pitch, data->slice_pitch);
 
     return WINED3D_OK;
 }

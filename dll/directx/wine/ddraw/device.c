@@ -1854,7 +1854,7 @@ static HRESULT d3d_device7_SetRenderTarget(IDirect3DDevice7 *iface,
         return DDERR_INVALIDCAPS;
     }
 
-    if (device->hw && !(target_impl->surface_desc.ddsCaps.dwCaps & DDSCAPS_VIDEOMEMORY))
+    if (!(target_impl->surface_desc.ddsCaps.dwCaps & DDSCAPS_VIDEOMEMORY))
     {
         WARN("Surface %p is not in video memory.\n", target_impl);
         wined3d_mutex_unlock();
@@ -1930,7 +1930,7 @@ static HRESULT WINAPI d3d_device3_SetRenderTarget(IDirect3DDevice3 *iface,
         return DDERR_INVALIDPIXELFORMAT;
     }
 
-    if (device->hw && !(target_impl->surface_desc.ddsCaps.dwCaps & DDSCAPS_VIDEOMEMORY))
+    if (!(target_impl->surface_desc.ddsCaps.dwCaps & DDSCAPS_VIDEOMEMORY))
     {
         WARN("Surface %p is not in video memory.\n", target_impl);
         IDirectDrawSurface4_AddRef(target);
@@ -1979,7 +1979,7 @@ static HRESULT WINAPI d3d_device2_SetRenderTarget(IDirect3DDevice2 *iface,
         return DDERR_INVALIDPIXELFORMAT;
     }
 
-    if (device->hw && !(target_impl->surface_desc.ddsCaps.dwCaps & DDSCAPS_VIDEOMEMORY))
+    if (!(target_impl->surface_desc.ddsCaps.dwCaps & DDSCAPS_VIDEOMEMORY))
     {
         WARN("Surface %p is not in video memory.\n", target_impl);
         IDirectDrawSurface_AddRef(target);
@@ -5296,35 +5296,31 @@ static HRESULT WINAPI d3d_device7_Clear_FPUPreserve(IDirect3DDevice7 *iface, DWO
     return hr;
 }
 
+/*****************************************************************************
+ * IDirect3DDevice7::SetViewport
+ *
+ * Sets the current viewport.
+ *
+ * Version 7 only, but IDirect3DViewport uses this call for older
+ * versions
+ *
+ * Params:
+ *  Data: The new viewport to set
+ *
+ * Returns:
+ *  D3D_OK on success
+ *  DDERR_INVALIDPARAMS if Data is NULL
+ *
+ *****************************************************************************/
 static HRESULT d3d_device7_SetViewport(IDirect3DDevice7 *iface, D3DVIEWPORT7 *viewport)
 {
     struct d3d_device *device = impl_from_IDirect3DDevice7(iface);
-    struct wined3d_sub_resource_desc rt_desc;
-    struct wined3d_rendertarget_view *rtv;
-    struct ddraw_surface *surface;
     struct wined3d_viewport vp;
 
     TRACE("iface %p, viewport %p.\n", iface, viewport);
 
     if (!viewport)
         return DDERR_INVALIDPARAMS;
-
-    wined3d_mutex_lock();
-    if (!(rtv = wined3d_device_get_rendertarget_view(device->wined3d_device, 0)))
-    {
-        wined3d_mutex_unlock();
-        return DDERR_INVALIDCAPS;
-    }
-    surface = wined3d_rendertarget_view_get_sub_resource_parent(rtv);
-    wined3d_texture_get_sub_resource_desc(surface->wined3d_texture, surface->sub_resource_idx, &rt_desc);
-
-    if (viewport->dwX > rt_desc.width || viewport->dwWidth > rt_desc.width - viewport->dwX
-            || viewport->dwY > rt_desc.height || viewport->dwHeight > rt_desc.height - viewport->dwY)
-    {
-        WARN("Invalid viewport, returning E_INVALIDARG.\n");
-        wined3d_mutex_unlock();
-        return E_INVALIDARG;
-    }
 
     vp.x = viewport->dwX;
     vp.y = viewport->dwY;
@@ -5333,7 +5329,8 @@ static HRESULT d3d_device7_SetViewport(IDirect3DDevice7 *iface, D3DVIEWPORT7 *vi
     vp.min_z = viewport->dvMinZ;
     vp.max_z = viewport->dvMaxZ;
 
-    wined3d_device_set_viewports(device->wined3d_device, 1, &vp);
+    wined3d_mutex_lock();
+    wined3d_device_set_viewport(device->wined3d_device, &vp);
     wined3d_mutex_unlock();
 
     return D3D_OK;
@@ -5356,6 +5353,21 @@ static HRESULT WINAPI d3d_device7_SetViewport_FPUPreserve(IDirect3DDevice7 *ifac
     return hr;
 }
 
+/*****************************************************************************
+ * IDirect3DDevice::GetViewport
+ *
+ * Returns the current viewport
+ *
+ * Version 7
+ *
+ * Params:
+ *  Data: D3D7Viewport structure to write the viewport information to
+ *
+ * Returns:
+ *  D3D_OK on success
+ *  DDERR_INVALIDPARAMS if Data is NULL
+ *
+ *****************************************************************************/
 static HRESULT d3d_device7_GetViewport(IDirect3DDevice7 *iface, D3DVIEWPORT7 *viewport)
 {
     struct d3d_device *device = impl_from_IDirect3DDevice7(iface);
@@ -5367,7 +5379,7 @@ static HRESULT d3d_device7_GetViewport(IDirect3DDevice7 *iface, D3DVIEWPORT7 *vi
         return DDERR_INVALIDPARAMS;
 
     wined3d_mutex_lock();
-    wined3d_device_get_viewports(device->wined3d_device, NULL, &wined3d_viewport);
+    wined3d_device_get_viewport(device->wined3d_device, &wined3d_viewport);
     wined3d_mutex_unlock();
 
     viewport->dwX = wined3d_viewport.x;
@@ -6891,7 +6903,7 @@ enum wined3d_depth_buffer_type d3d_device_update_depth_stencil(struct d3d_device
     return WINED3D_ZB_TRUE;
 }
 
-static HRESULT d3d_device_init(struct d3d_device *device, struct ddraw *ddraw, BOOL hw,
+static HRESULT d3d_device_init(struct d3d_device *device, struct ddraw *ddraw,
         struct ddraw_surface *target, IUnknown *rt_iface, UINT version, IUnknown *outer_unknown)
 {
     static const D3DMATRIX ident =
@@ -6914,7 +6926,6 @@ static HRESULT d3d_device_init(struct d3d_device *device, struct ddraw *ddraw, B
     device->IUnknown_inner.lpVtbl = &d3d_device_inner_vtbl;
     device->ref = 1;
     device->version = version;
-    device->hw = hw;
 
     if (outer_unknown)
         device->outer_unknown = outer_unknown;
@@ -6965,18 +6976,14 @@ static HRESULT d3d_device_init(struct d3d_device *device, struct ddraw *ddraw, B
     return D3D_OK;
 }
 
-HRESULT d3d_device_create(struct ddraw *ddraw, const GUID *guid, struct ddraw_surface *target, IUnknown *rt_iface,
+HRESULT d3d_device_create(struct ddraw *ddraw, struct ddraw_surface *target, IUnknown *rt_iface,
         UINT version, struct d3d_device **device, IUnknown *outer_unknown)
 {
     struct d3d_device *object;
-    BOOL hw = TRUE;
     HRESULT hr;
 
-    TRACE("ddraw %p, guid %s, target %p, version %u, device %p, outer_unknown %p.\n",
-            ddraw, debugstr_guid(guid), target, version, device, outer_unknown);
-
-    if (IsEqualGUID(guid, &IID_IDirect3DRGBDevice))
-        hw = FALSE;
+    TRACE("ddraw %p, target %p, version %u, device %p, outer_unknown %p.\n",
+            ddraw, target, version, device, outer_unknown);
 
     if (!(target->surface_desc.ddsCaps.dwCaps & DDSCAPS_3DDEVICE)
             || (target->surface_desc.ddsCaps.dwCaps & DDSCAPS_ZBUFFER))
@@ -6991,7 +6998,7 @@ HRESULT d3d_device_create(struct ddraw *ddraw, const GUID *guid, struct ddraw_su
         return DDERR_NOPALETTEATTACHED;
     }
 
-    if (hw && !(target->surface_desc.ddsCaps.dwCaps & DDSCAPS_VIDEOMEMORY))
+    if (!(target->surface_desc.ddsCaps.dwCaps & DDSCAPS_VIDEOMEMORY))
     {
         WARN("Surface %p is not in video memory.\n", target);
         return D3DERR_SURFACENOTINVIDMEM;
@@ -7017,7 +7024,7 @@ HRESULT d3d_device_create(struct ddraw *ddraw, const GUID *guid, struct ddraw_su
         return DDERR_OUTOFMEMORY;
     }
 
-    if (FAILED(hr = d3d_device_init(object, ddraw, hw, target, rt_iface, version, outer_unknown)))
+    if (FAILED(hr = d3d_device_init(object, ddraw, target, rt_iface, version, outer_unknown)))
     {
         WARN("Failed to initialize device, hr %#x.\n", hr);
         heap_free(object);

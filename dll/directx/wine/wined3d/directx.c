@@ -27,7 +27,7 @@
 #include <stdio.h>
 
 #include "wined3d_private.h"
-#include "wine/winternl.h"
+#include "winternl.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(d3d);
 WINE_DECLARE_DEBUG_CHANNEL(d3d_perf);
@@ -122,7 +122,6 @@ static const struct wined3d_extension_map gl_extension_map[] =
     {"GL_ARB_cull_distance",                ARB_CULL_DISTANCE             },
     {"GL_ARB_debug_output",                 ARB_DEBUG_OUTPUT              },
     {"GL_ARB_depth_buffer_float",           ARB_DEPTH_BUFFER_FLOAT        },
-    {"GL_ARB_depth_clamp",                  ARB_DEPTH_CLAMP               },
     {"GL_ARB_depth_texture",                ARB_DEPTH_TEXTURE             },
     {"GL_ARB_derivative_control",           ARB_DERIVATIVE_CONTROL        },
     {"GL_ARB_draw_buffers",                 ARB_DRAW_BUFFERS              },
@@ -156,7 +155,6 @@ static const struct wined3d_extension_map gl_extension_map[] =
     {"GL_ARB_point_parameters",             ARB_POINT_PARAMETERS          },
     {"GL_ARB_point_sprite",                 ARB_POINT_SPRITE              },
     {"GL_ARB_provoking_vertex",             ARB_PROVOKING_VERTEX          },
-    {"GL_ARB_sample_shading",               ARB_SAMPLE_SHADING            },
     {"GL_ARB_sampler_objects",              ARB_SAMPLER_OBJECTS           },
     {"GL_ARB_seamless_cube_map",            ARB_SEAMLESS_CUBE_MAP         },
     {"GL_ARB_shader_atomic_counters",       ARB_SHADER_ATOMIC_COUNTERS    },
@@ -164,7 +162,6 @@ static const struct wined3d_extension_map gl_extension_map[] =
     {"GL_ARB_shader_image_load_store",      ARB_SHADER_IMAGE_LOAD_STORE   },
     {"GL_ARB_shader_image_size",            ARB_SHADER_IMAGE_SIZE         },
     {"GL_ARB_shader_storage_buffer_object", ARB_SHADER_STORAGE_BUFFER_OBJECT},
-    {"GL_ARB_shader_texture_image_samples", ARB_SHADER_TEXTURE_IMAGE_SAMPLES},
     {"GL_ARB_shader_texture_lod",           ARB_SHADER_TEXTURE_LOD        },
     {"GL_ARB_shading_language_100",         ARB_SHADING_LANGUAGE_100      },
     {"GL_ARB_shading_language_420pack",     ARB_SHADING_LANGUAGE_420PACK  },
@@ -203,6 +200,7 @@ static const struct wined3d_extension_map gl_extension_map[] =
     {"GL_ARB_transform_feedback3",          ARB_TRANSFORM_FEEDBACK3       },
     {"GL_ARB_uniform_buffer_object",        ARB_UNIFORM_BUFFER_OBJECT     },
     {"GL_ARB_vertex_array_bgra",            ARB_VERTEX_ARRAY_BGRA         },
+    {"GL_ARB_vertex_blend",                 ARB_VERTEX_BLEND              },
     {"GL_ARB_vertex_buffer_object",         ARB_VERTEX_BUFFER_OBJECT      },
     {"GL_ARB_vertex_program",               ARB_VERTEX_PROGRAM            },
     {"GL_ARB_vertex_shader",                ARB_VERTEX_SHADER             },
@@ -233,7 +231,6 @@ static const struct wined3d_extension_map gl_extension_map[] =
     {"GL_EXT_packed_depth_stencil",         EXT_PACKED_DEPTH_STENCIL      },
     {"GL_EXT_packed_float",                 EXT_PACKED_FLOAT              },
     {"GL_EXT_point_parameters",             EXT_POINT_PARAMETERS          },
-    {"GL_EXT_polygon_offset_clamp",         EXT_POLYGON_OFFSET_CLAMP      },
     {"GL_EXT_provoking_vertex",             EXT_PROVOKING_VERTEX          },
     {"GL_EXT_secondary_color",              EXT_SECONDARY_COLOR           },
     {"GL_EXT_stencil_two_side",             EXT_STENCIL_TWO_SIDE          },
@@ -274,7 +271,6 @@ static const struct wined3d_extension_map gl_extension_map[] =
     {"GL_NV_vertex_program2",               NV_VERTEX_PROGRAM2            },
     {"GL_NV_vertex_program2_option",        NV_VERTEX_PROGRAM2_OPTION     },
     {"GL_NV_vertex_program3",               NV_VERTEX_PROGRAM3            },
-    {"GL_NVX_gpu_memory_info",              NVX_GPU_MEMORY_INFO           },
 };
 
 static const struct wined3d_extension_map wgl_extension_map[] =
@@ -679,7 +675,7 @@ static BOOL match_allows_spec_alpha(const struct wined3d_gl_info *gl_info, struc
     GLenum error;
     DWORD data[16];
 
-    if (!gl_info->supported[EXT_SECONDARY_COLOR] || !gl_info->supported[WINED3D_GL_LEGACY_CONTEXT])
+    if (!gl_info->supported[EXT_SECONDARY_COLOR])
         return FALSE;
 
     while (gl_info->gl_ops.gl.p_glGetError());
@@ -858,8 +854,6 @@ static BOOL match_broken_arb_fog(const struct wined3d_gl_info *gl_info, struct w
     if (wined3d_settings.offscreen_rendering_mode != ORM_FBO)
         return FALSE;
     if (!gl_info->supported[ARB_FRAGMENT_PROGRAM])
-        return FALSE;
-    if (!gl_info->supported[WINED3D_GL_LEGACY_CONTEXT])
         return FALSE;
 
     gl_info->gl_ops.gl.p_glGenTextures(1, &tex);
@@ -1347,7 +1341,6 @@ static const struct gpu_description gpu_description_table[] =
     {HW_VENDOR_NVIDIA,     CARD_NVIDIA_GEFORCE_GTX550,     "NVIDIA GeForce GTX 550 Ti",        DRIVER_NVIDIA_GEFORCE8,  1024},
     {HW_VENDOR_NVIDIA,     CARD_NVIDIA_GEFORCE_GT555M,     "NVIDIA GeForce GT 555M",           DRIVER_NVIDIA_GEFORCE8,  1024},
     {HW_VENDOR_NVIDIA,     CARD_NVIDIA_GEFORCE_GTX560TI,   "NVIDIA GeForce GTX 560 Ti",        DRIVER_NVIDIA_GEFORCE8,  1024},
-    {HW_VENDOR_NVIDIA,     CARD_NVIDIA_GEFORCE_GTX560M,    "NVIDIA GeForce GTX 560M",          DRIVER_NVIDIA_GEFORCE8,  3072},
     {HW_VENDOR_NVIDIA,     CARD_NVIDIA_GEFORCE_GTX560,     "NVIDIA GeForce GTX 560",           DRIVER_NVIDIA_GEFORCE8,  1024},
     {HW_VENDOR_NVIDIA,     CARD_NVIDIA_GEFORCE_GTX570,     "NVIDIA GeForce GTX 570",           DRIVER_NVIDIA_GEFORCE8,  1280},
     {HW_VENDOR_NVIDIA,     CARD_NVIDIA_GEFORCE_GTX580,     "NVIDIA GeForce GTX 580",           DRIVER_NVIDIA_GEFORCE8,  1536},
@@ -1401,13 +1394,11 @@ static const struct gpu_description gpu_description_table[] =
     {HW_VENDOR_NVIDIA,     CARD_NVIDIA_GEFORCE_GTX980,     "NVIDIA GeForce GTX 980",           DRIVER_NVIDIA_GEFORCE8,  4096},
     {HW_VENDOR_NVIDIA,     CARD_NVIDIA_GEFORCE_GTX980TI,   "NVIDIA GeForce GTX 980 Ti",        DRIVER_NVIDIA_GEFORCE8,  6144},
     {HW_VENDOR_NVIDIA,     CARD_NVIDIA_GEFORCE_GTX1050,    "NVIDIA GeForce GTX 1050",          DRIVER_NVIDIA_GEFORCE8,  2048},
-    {HW_VENDOR_NVIDIA,     CARD_NVIDIA_GEFORCE_GTX1050TI,  "NVIDIA GeForce GTX 1050 Ti",       DRIVER_NVIDIA_GEFORCE8,  4096},
     {HW_VENDOR_NVIDIA,     CARD_NVIDIA_GEFORCE_GTX1060,    "NVIDIA GeForce GTX 1060",          DRIVER_NVIDIA_GEFORCE8,  6144},
     {HW_VENDOR_NVIDIA,     CARD_NVIDIA_GEFORCE_GTX1070,    "NVIDIA GeForce GTX 1070",          DRIVER_NVIDIA_GEFORCE8,  8192},
     {HW_VENDOR_NVIDIA,     CARD_NVIDIA_GEFORCE_GTX1080,    "NVIDIA GeForce GTX 1080",          DRIVER_NVIDIA_GEFORCE8,  8192},
     {HW_VENDOR_NVIDIA,     CARD_NVIDIA_GEFORCE_GTX1080TI,  "NVIDIA GeForce GTX 1080 Ti",       DRIVER_NVIDIA_GEFORCE8,  11264},
     {HW_VENDOR_NVIDIA,     CARD_NVIDIA_TITANX_PASCAL,      "NVIDIA TITAN X (Pascal)",          DRIVER_NVIDIA_GEFORCE8,  12288},
-    {HW_VENDOR_NVIDIA,     CARD_NVIDIA_TITANV,             "NVIDIA TITAN V",                   DRIVER_NVIDIA_GEFORCE8,  12288},
 
     /* AMD cards */
     {HW_VENDOR_AMD,        CARD_AMD_RAGE_128PRO,           "ATI Rage Fury",                    DRIVER_AMD_RAGE_128PRO,  16  },
@@ -1587,15 +1578,6 @@ static const struct gpu_description *query_gpu_description(const struct wined3d_
             *vram_bytes = (UINT64)value * 1024 * 1024;
         TRACE("Card reports vendor PCI ID 0x%04x, device PCI ID 0x%04x, 0x%s bytes of video memory.\n",
                 vendor, device, wine_dbgstr_longlong(*vram_bytes));
-    }
-    else if (gl_info->supported[NVX_GPU_MEMORY_INFO])
-    {
-        GLint vram_kb;
-        gl_info->gl_ops.gl.p_glGetIntegerv(GL_GPU_MEMORY_INFO_DEDICATED_VIDMEM_NVX, &vram_kb);
-
-        *vram_bytes = (UINT64)vram_kb * 1024;
-        TRACE("Got 0x%s as video memory from NVX_GPU_MEMORY_INFO extension.\n",
-                wine_dbgstr_longlong(*vram_bytes));
     }
 
     if (wined3d_settings.pci_vendor_id != PCI_VENDOR_NONE)
@@ -1809,7 +1791,6 @@ static enum wined3d_gl_vendor wined3d_guess_gl_vendor(const struct wined3d_gl_in
         return GL_VENDOR_FGLRX;
 
     if (strstr(gl_vendor_string, "Mesa")
-            || strstr(gl_vendor_string, "Brian Paul")
             || strstr(gl_vendor_string, "X.Org")
             || strstr(gl_vendor_string, "Advanced Micro Devices, Inc.")
             || strstr(gl_vendor_string, "DRI R300 Project")
@@ -1906,13 +1887,11 @@ static const struct wined3d_renderer_table
 cards_nvidia_binary[] =
 {
     /* Direct 3D 11 */
-    {"TITAN V",                     CARD_NVIDIA_TITANV},            /* GeForce 1000 - highend */
     {"TITAN X (Pascal)",            CARD_NVIDIA_TITANX_PASCAL},     /* GeForce 1000 - highend */
     {"GTX 1080 Ti",                 CARD_NVIDIA_GEFORCE_GTX1080TI}, /* GeForce 1000 - highend */
     {"GTX 1080",                    CARD_NVIDIA_GEFORCE_GTX1080},   /* GeForce 1000 - highend */
     {"GTX 1070",                    CARD_NVIDIA_GEFORCE_GTX1070},   /* GeForce 1000 - highend */
     {"GTX 1060",                    CARD_NVIDIA_GEFORCE_GTX1060},   /* GeForce 1000 - midend high */
-    {"GTX 1050 Ti",                 CARD_NVIDIA_GEFORCE_GTX1050TI}, /* GeForce 1000 - midend */
     {"GTX 1050",                    CARD_NVIDIA_GEFORCE_GTX1050},   /* GeForce 1000 - midend */
     {"GTX 980 Ti",                  CARD_NVIDIA_GEFORCE_GTX980TI},  /* GeForce 900 - highend */
     {"GTX 980",                     CARD_NVIDIA_GEFORCE_GTX980},    /* GeForce 900 - highend */
@@ -1966,7 +1945,6 @@ cards_nvidia_binary[] =
     {"GTX 580",                     CARD_NVIDIA_GEFORCE_GTX580},    /* Geforce 500 - highend */
     {"GTX 570",                     CARD_NVIDIA_GEFORCE_GTX570},    /* Geforce 500 - midend high */
     {"GTX 560 Ti",                  CARD_NVIDIA_GEFORCE_GTX560TI},  /* Geforce 500 - midend */
-    {"GTX 560M",                    CARD_NVIDIA_GEFORCE_GTX560M},   /* Geforce 500 - midend mobile */
     {"GTX 560",                     CARD_NVIDIA_GEFORCE_GTX560},    /* Geforce 500 - midend */
     {"GT 555M",                     CARD_NVIDIA_GEFORCE_GT555M},    /* Geforce 500 - midend mobile */
     {"GTX 550 Ti",                  CARD_NVIDIA_GEFORCE_GTX550},    /* Geforce 500 - midend */
@@ -2230,7 +2208,9 @@ cards_intel[] =
     {"830M",                        CARD_INTEL_830M},
 },
 /* 20101109 - These are never returned by current Gallium radeon
- * drivers: R700, RV790, R680, RV535, RV516, R410, RS485, RV360, RV351. */
+ * drivers: R700, RV790, R680, RV535, RV516, R410, RS485, RV360, RV351.
+ *
+ * These are returned but not handled: RC410, RV380. */
 cards_amd_mesa[] =
 {
     /* Polaris 10/11 */
@@ -2308,12 +2288,10 @@ cards_amd_mesa[] =
     {"RS482",                       CARD_AMD_RADEON_XPRESS_200M},
     {"RS480",                       CARD_AMD_RADEON_XPRESS_200M},
     {"RS400",                       CARD_AMD_RADEON_XPRESS_200M},
-    {"RC410",                       CARD_AMD_RADEON_XPRESS_200M},
     /* R300 */
     {"R360",                        CARD_AMD_RADEON_9500},
     {"R350",                        CARD_AMD_RADEON_9500},
     {"R300",                        CARD_AMD_RADEON_9500},
-    {"RV380",                       CARD_AMD_RADEON_9500},
     {"RV370",                       CARD_AMD_RADEON_9500},
     {"RV360",                       CARD_AMD_RADEON_9500},
     {"RV351",                       CARD_AMD_RADEON_9500},
@@ -2827,8 +2805,6 @@ static void load_gl_funcs(struct wined3d_gl_info *gl_info)
     USE_GL_FUNC(glPointParameterfvARB)
     /* GL_ARB_provoking_vertex */
     USE_GL_FUNC(glProvokingVertex)
-    /* GL_ARB_sample_shading */
-    USE_GL_FUNC(glMinSampleShadingARB)
     /* GL_ARB_sampler_objects */
     USE_GL_FUNC(glGenSamplers)
     USE_GL_FUNC(glDeleteSamplers)
@@ -2955,6 +2931,17 @@ static void load_gl_funcs(struct wined3d_gl_info *gl_info)
     USE_GL_FUNC(glGetUniformBlockIndex)
     USE_GL_FUNC(glGetUniformIndices)
     USE_GL_FUNC(glUniformBlockBinding)
+    /* GL_ARB_vertex_blend */
+    USE_GL_FUNC(glVertexBlendARB)
+    USE_GL_FUNC(glWeightPointerARB)
+    USE_GL_FUNC(glWeightbvARB)
+    USE_GL_FUNC(glWeightdvARB)
+    USE_GL_FUNC(glWeightfvARB)
+    USE_GL_FUNC(glWeightivARB)
+    USE_GL_FUNC(glWeightsvARB)
+    USE_GL_FUNC(glWeightubvARB)
+    USE_GL_FUNC(glWeightuivARB)
+    USE_GL_FUNC(glWeightusvARB)
     /* GL_ARB_vertex_buffer_object */
     USE_GL_FUNC(glBindBufferARB)
     USE_GL_FUNC(glBufferDataARB)
@@ -3129,8 +3116,6 @@ static void load_gl_funcs(struct wined3d_gl_info *gl_info)
     /* GL_EXT_point_parameters */
     USE_GL_FUNC(glPointParameterfEXT)
     USE_GL_FUNC(glPointParameterfvEXT)
-    /* GL_EXT_polygon_offset_clamp */
-    USE_GL_FUNC(glPolygonOffsetClampEXT)
     /* GL_EXT_provoking_vertex */
     USE_GL_FUNC(glProvokingVertexEXT)
     /* GL_EXT_secondary_color */
@@ -3422,7 +3407,6 @@ static void load_gl_funcs(struct wined3d_gl_info *gl_info)
     MAP_GL_FUNCTION(glIsEnabledi, glIsEnabledIndexedEXT);
     MAP_GL_FUNCTION(glLinkProgram, glLinkProgramARB);
     MAP_GL_FUNCTION(glMapBuffer, glMapBufferARB);
-    MAP_GL_FUNCTION(glMinSampleShading, glMinSampleShadingARB);
     MAP_GL_FUNCTION_CAST(glShaderSource, glShaderSourceARB);
     MAP_GL_FUNCTION(glTexBuffer, glTexBufferARB);
     MAP_GL_FUNCTION_CAST(glTexImage3D, glTexImage3DEXT);
@@ -3476,6 +3460,7 @@ static void wined3d_adapter_init_limits(struct wined3d_gl_info *gl_info)
     GLfloat gl_floatv[2];
     GLint gl_max;
 
+    gl_info->limits.blends = 1;
     gl_info->limits.buffers = 1;
     gl_info->limits.textures = 0;
     gl_info->limits.texture_coords = 0;
@@ -3541,12 +3526,6 @@ static void wined3d_adapter_init_limits(struct wined3d_gl_info *gl_info)
         gl_info->gl_ops.gl.p_glGetIntegerv(GL_MAX_DRAW_BUFFERS_ARB, &gl_max);
         gl_info->limits.buffers = min(MAX_RENDER_TARGET_VIEWS, gl_max);
         TRACE("Max draw buffers: %u.\n", gl_max);
-    }
-    if (gl_info->supported[ARB_BLEND_FUNC_EXTENDED])
-    {
-        gl_info->gl_ops.gl.p_glGetIntegerv(GL_MAX_DUAL_SOURCE_DRAW_BUFFERS, &gl_max);
-        gl_info->limits.dual_buffers = gl_max;
-        TRACE("Max dual source draw buffers: %u.\n", gl_max);
     }
     if (gl_info->supported[ARB_MULTITEXTURE])
     {
@@ -3631,6 +3610,12 @@ static void wined3d_adapter_init_limits(struct wined3d_gl_info *gl_info)
         gl_info->limits.texture_coords = 1;
     }
 
+    if (gl_info->supported[ARB_VERTEX_BLEND])
+    {
+        gl_info->gl_ops.gl.p_glGetIntegerv(GL_MAX_VERTEX_UNITS_ARB, &gl_max);
+        gl_info->limits.blends = gl_max;
+        TRACE("Max blends: %u.\n", gl_info->limits.blends);
+    }
     if (gl_info->supported[EXT_TEXTURE3D])
     {
         gl_info->gl_ops.gl.p_glGetIntegerv(GL_MAX_3D_TEXTURE_SIZE_EXT, &gl_max);
@@ -3900,7 +3885,6 @@ static BOOL wined3d_adapter_init_gl_caps(struct wined3d_adapter *adapter,
         {EXT_TEXTURE_SNORM,                MAKEDWORD_VERSION(3, 1)},
         /* We don't need or want GL_ARB_texture_rectangle (core in 3.1). */
 
-        {ARB_DEPTH_CLAMP,                  MAKEDWORD_VERSION(3, 2)},
         {ARB_DRAW_ELEMENTS_BASE_VERTEX,    MAKEDWORD_VERSION(3, 2)},
         /* ARB_geometry_shader4 exposes a somewhat different API compared to 3.2
          * core geometry shaders so it's not really correct to expose the
@@ -3924,7 +3908,6 @@ static BOOL wined3d_adapter_init_gl_caps(struct wined3d_adapter *adapter,
 
         {ARB_DRAW_INDIRECT,                MAKEDWORD_VERSION(4, 0)},
         {ARB_GPU_SHADER5,                  MAKEDWORD_VERSION(4, 0)},
-        {ARB_SAMPLE_SHADING,               MAKEDWORD_VERSION(4, 0)},
         {ARB_TESSELLATION_SHADER,          MAKEDWORD_VERSION(4, 0)},
         {ARB_TEXTURE_CUBE_MAP_ARRAY,       MAKEDWORD_VERSION(4, 0)},
         {ARB_TEXTURE_GATHER,               MAKEDWORD_VERSION(4, 0)},
@@ -3966,7 +3949,6 @@ static BOOL wined3d_adapter_init_gl_caps(struct wined3d_adapter *adapter,
         {ARB_CLIP_CONTROL,                 MAKEDWORD_VERSION(4, 5)},
         {ARB_CULL_DISTANCE,                MAKEDWORD_VERSION(4, 5)},
         {ARB_DERIVATIVE_CONTROL,           MAKEDWORD_VERSION(4, 5)},
-        {ARB_SHADER_TEXTURE_IMAGE_SAMPLES, MAKEDWORD_VERSION(4, 5)},
 
         {ARB_PIPELINE_STATISTICS_QUERY,    MAKEDWORD_VERSION(4, 6)},
         {ARB_TEXTURE_FILTER_ANISOTROPIC,   MAKEDWORD_VERSION(4, 6)},
@@ -4080,11 +4062,7 @@ static BOOL wined3d_adapter_init_gl_caps(struct wined3d_adapter *adapter,
         gl_info->supported[WINED3D_GL_BLEND_EQUATION] = TRUE;
 
     if (gl_version >= MAKEDWORD_VERSION(2, 0))
-    {
         gl_info->supported[WINED3D_GL_VERSION_2_0] = TRUE;
-        /* We want to use the core APIs for two-sided stencil in GL 2.0. */
-        gl_info->supported[EXT_STENCIL_TWO_SIDE] = FALSE;
-    }
     if (gl_version >= MAKEDWORD_VERSION(3, 2))
         gl_info->supported[WINED3D_GL_VERSION_3_2] = TRUE;
 
@@ -4343,10 +4321,6 @@ static BOOL wined3d_adapter_init_gl_caps(struct wined3d_adapter *adapter,
     adapter->d3d_info.valid_rt_mask = 0;
     for (i = 0; i < gl_info->limits.buffers; ++i)
         adapter->d3d_info.valid_rt_mask |= (1u << i);
-
-    adapter->d3d_info.valid_dual_rt_mask = 0;
-    for (i = 0; i < gl_info->limits.dual_buffers; ++i)
-        adapter->d3d_info.valid_dual_rt_mask |= (1u << i);
 
     if (!adapter->d3d_info.shader_color_key)
     {
@@ -5361,20 +5335,6 @@ HRESULT CDECL wined3d_check_device_format(const struct wined3d *wined3d, UINT ad
             gl_type_end = WINED3D_GL_RES_TYPE_TEX_3D;
             break;
 
-        case WINED3D_RTYPE_TEXTURE_1D:
-            allowed_usage = WINED3DUSAGE_DYNAMIC
-                    | WINED3DUSAGE_SOFTWAREPROCESSING
-                    | WINED3DUSAGE_TEXTURE
-                    | WINED3DUSAGE_QUERY_FILTER
-                    | WINED3DUSAGE_QUERY_GENMIPMAP
-                    | WINED3DUSAGE_QUERY_POSTPIXELSHADER_BLENDING
-                    | WINED3DUSAGE_QUERY_SRGBREAD
-                    | WINED3DUSAGE_QUERY_SRGBWRITE
-                    | WINED3DUSAGE_QUERY_VERTEXTEXTURE
-                    | WINED3DUSAGE_QUERY_WRAPANDMIP;
-            gl_type = gl_type_end = WINED3D_GL_RES_TYPE_TEX_1D;
-            break;
-
         case WINED3D_RTYPE_TEXTURE_2D:
             allowed_usage = WINED3DUSAGE_DEPTHSTENCIL
                     | WINED3DUSAGE_RENDERTARGET
@@ -5678,6 +5638,9 @@ HRESULT CDECL wined3d_get_device_caps(const struct wined3d *wined3d, UINT adapte
     caps->Caps3                    = WINED3DCAPS3_ALPHA_FULLSCREEN_FLIP_OR_DISCARD |
                                      WINED3DCAPS3_COPY_TO_VIDMEM                   |
                                      WINED3DCAPS3_COPY_TO_SYSTEMMEM;
+
+    caps->PresentationIntervals    = WINED3DPRESENT_INTERVAL_IMMEDIATE  |
+                                     WINED3DPRESENT_INTERVAL_ONE;
 
     caps->CursorCaps               = WINED3DCURSORCAPS_COLOR            |
                                      WINED3DCURSORCAPS_LOWRES;
@@ -6033,10 +5996,7 @@ HRESULT CDECL wined3d_get_device_caps(const struct wined3d *wined3d, UINT adapte
     caps->MaxUserClipPlanes                = vertex_caps.max_user_clip_planes;
     caps->MaxActiveLights                  = vertex_caps.max_active_lights;
     caps->MaxVertexBlendMatrices           = vertex_caps.max_vertex_blend_matrices;
-    if (device_type == WINED3D_DEVICE_TYPE_HAL)
-        caps->MaxVertexBlendMatrixIndex    = vertex_caps.max_vertex_blend_matrix_index;
-    else
-        caps->MaxVertexBlendMatrixIndex    = 255;
+    caps->MaxVertexBlendMatrixIndex        = vertex_caps.max_vertex_blend_matrix_index;
     caps->VertexProcessingCaps             = vertex_caps.vertex_processing_caps;
     caps->FVFCaps                          = vertex_caps.fvf_caps;
     caps->RasterCaps                      |= vertex_caps.raster_caps;
@@ -6608,16 +6568,16 @@ static DWORD get_max_gl_version(const struct wined3d_gl_info *gl_info, DWORD fla
 {
     const char *gl_vendor, *gl_renderer;
 
-    if (wined3d_settings.explicit_gl_version)
+    if (wined3d_settings.explicit_gl_version || (flags & WINED3D_PIXEL_CENTER_INTEGER))
         return wined3d_settings.max_gl_version;
 
     gl_vendor = (const char *)gl_info->gl_ops.gl.p_glGetString(GL_VENDOR);
     gl_renderer = (const char *)gl_info->gl_ops.gl.p_glGetString(GL_RENDERER);
     if (!gl_vendor || !gl_renderer
             || wined3d_guess_card_vendor(gl_vendor, gl_renderer) == HW_VENDOR_NVIDIA)
-        return MAKEDWORD_VERSION(1, 0);
+        return wined3d_settings.max_gl_version;
 
-    return wined3d_settings.max_gl_version;
+    return MAKEDWORD_VERSION(4, 4);
 }
 
 static BOOL wined3d_adapter_init(struct wined3d_adapter *adapter, UINT ordinal, DWORD wined3d_creation_flags)
