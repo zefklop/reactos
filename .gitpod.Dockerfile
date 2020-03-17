@@ -16,7 +16,7 @@ RUN sudo apt-get -q update && \
 
 RUN wget http://downloads.sourceforge.net/reactos/RosBE-Unix-2.1.2.tar.bz2 && \
     tar -xjf RosBE-Unix-2.1.2.tar.bz2 && \
-    rm -f RosBE-Unix-2.1.2.tar.bz2
+    rm -f RosBE-Unix-2.1.2.tar.bz2 && \
     cd RosBE-Unix-2.1.2 && \
     sudo ./RosBE-Builder.sh /usr/local/RosBE && \
     cd .. && \
