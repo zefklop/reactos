@@ -121,10 +121,7 @@
 #include "vbrender.h"
 #include "vbxform.h"
 #include "xform.h"
-#include <wine/debug.h>
 #endif
-
-WINE_DEFAULT_DEBUG_CHANNEL(opengl32);
 
 
 #if 0  /* NOT USED AT THIS TIME */
@@ -335,17 +332,6 @@ static void transform_points3( GLcontext *ctx, GLuint n,
          return;
    }
 #endif
-   if (1)
-   {
-       GLuint i;
-       for (i = 0; i < n; i++)
-       {
-           TRACE("(%3.1f, %3.1f, %3.1f, %3.1f) --> (%3.1f, %3.1f, %3.1f, %3.1f)\n",
-                   vObj[i][0], vObj[i][1], vObj[i][2], vObj[i][3],
-                   vEye[i][0], vEye[i][1], vEye[i][2], vEye[i][3]);
-       }
-   }
-
 }
 
 
@@ -883,16 +869,6 @@ static void viewport_map_vertices( GLcontext *ctx,
             }
          }
       }
-   }
-   if (1)
-   {
-       GLuint i;
-       for (i = 0; i < n; i++)
-       {
-           TRACE("(%3.1f, %3.1f, %3.1f, %3.1f) --> (%3.1f, %3.1f, %3.1f)\n",
-                   vClip[i][0], vClip[i][1], vClip[i][2], vClip[i][3],
-                   vWin[i][0], vWin[i][1], vWin[i][2]);
-       }
    }
 }
 

@@ -36,7 +36,10 @@
 #include "teximage.h"
 #include "types.h"
 #include "vb.h"
+#include "wine/debug.h"
 #endif
+
+WINE_DEFAULT_DEBUG_CHANNEL(opengl32);
 
 void APIENTRY _mesa_Accum( GLenum op, GLfloat value )
 {
@@ -2542,6 +2545,9 @@ void APIENTRY _mesa_TexImage2D( GLenum target, GLint level, GLint internalformat
   struct gl_image *teximage;
 
   GET_CONTEXT;
+  
+  TRACE("target %x, level %i, internalformat, %x, width %u, height %u, border %i,format %x, type %x, pixels %p\n",
+    target, level, internalformat, width, height, border, format, type, pixels);
 
   teximage = gl_unpack_image( CC, width, height, format, type, pixels );
   (*CC->API.TexImage2D)( CC, target, level, internalformat,
