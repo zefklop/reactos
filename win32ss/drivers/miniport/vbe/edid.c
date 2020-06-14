@@ -183,6 +183,27 @@ VBEReadEdid(
    INT10_BIOS_ARGUMENTS BiosRegisters;
 
    VideoPortDebugPrint(Trace, "VBEMP: VBEReadEdid() called\n");
+   
+   /*
+    * Check that there is actual support for this interface
+    */
+   VideoPortZeroMemory(&BiosRegisters, sizeof(BiosRegisters));
+   BiosRegisters.Eax = VBE_DDC;
+   BiosRegisters.Ebx = VBE_DDC_GET_CAPS;
+   BiosRegisters.Ecx = ChildIndex;
+   VBEDeviceExtension->Int10Interface.Int10CallBios(
+      VBEDeviceExtension->Int10Interface.Context,
+      &BiosRegisters);
+   if (VBE_GETRETURNCODE(BiosRegisters.Eax) != VBE_SUCCESS)
+   {
+      VideoPortDebugPrint(Trace, "VBEMP: Unable to get DDC caps for child device %lu\n", ChildIndex);
+      return FALSE;
+   }
+   if ((BiosRegisters.Ebx & 0x3) == 0)
+   {
+      VideoPortDebugPrint(Trace, "VBEMP: DDC unsupported for child device %lu\n", ChildIndex);
+      return FALSE;
+   }
 
    /*
     * Directly read EDID information
@@ -191,7 +212,6 @@ VBEReadEdid(
    BiosRegisters.Eax = VBE_DDC;
    BiosRegisters.Ebx = VBE_DDC_READ_EDID;
    BiosRegisters.Ecx = ChildIndex;
-   BiosRegisters.Edx = 1;
    BiosRegisters.Edi = VBEDeviceExtension->TrampolineMemoryOffset;
    BiosRegisters.SegEs = VBEDeviceExtension->TrampolineMemorySegment;
    VBEDeviceExtension->Int10Interface.Int10CallBios(
@@ -199,7 +219,10 @@ VBEReadEdid(
       &BiosRegisters);
 
    if (VBE_GETRETURNCODE(BiosRegisters.Eax) != VBE_SUCCESS)
+   {
+      VideoPortDebugPrint(Trace, "VBEMP: Unable to read EDID from child device %lu\n", ChildIndex);
       return FALSE;
+   }
 
    /*
     * Copy the EDID information to our buffer

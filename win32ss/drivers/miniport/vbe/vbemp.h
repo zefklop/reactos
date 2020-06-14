@@ -69,7 +69,7 @@
 /*
  * VBE DDC Sub-Functions
  */
-
+#define VBE_DDC_GET_CAPS                       0x00
 #define VBE_DDC_READ_EDID                      0x01
 #define VBE_DDC_REPORT_CAPABILITIES            0x10
 #define VBE_DDC_BEGIN_SCL_SDA_CONTROL          0x11
