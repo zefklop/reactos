@@ -17,7 +17,7 @@
 
 static UINT SystemPaletteUse = SYSPAL_NOSTATIC;  /* The program need save the pallete and restore it */
 
-PALETTE gpalRGB, gpalBGR, gpalRGB555, gpalRGB565, *gppalMono, *gppalDefault;
+PALETTE gpalRGB, gpalBGR, gpalRGB555, gpalRGB565, *gppalMono, *gppalDefault, *gppalDIB4, *gppalDIB8;
 PPALETTE appalSurfaceDefault[11];
 
 const PALETTEENTRY g_sysPalTemplate[NB_RESERVED_COLORS] =
@@ -51,6 +51,27 @@ const PALETTEENTRY g_sysPalTemplate[NB_RESERVED_COLORS] =
   { 0xff, 0xff, 0xff, PC_SYS_USED }     // Last 10
 };
 
+static const PALETTEENTRY g_palDIB4Template[16] =
+{
+    // Red  Green Blue  Flags
+    { 0x00, 0x00, 0x00, 0 },
+    { 0x80, 0x00, 0x00, 0 },
+    { 0x00, 0x80, 0x00, 0 },
+    { 0x80, 0x80, 0x00, 0 },
+    { 0x00, 0x00, 0x80, 0 },
+    { 0x80, 0x00, 0x80, 0 },
+    { 0x00, 0x80, 0x80, 0 },
+    { 0x80, 0x80, 0x80, 0 },
+    { 0xc0, 0xc0, 0xc0, 0 },
+    { 0xff, 0x00, 0x00, 0 },
+    { 0x00, 0xff, 0x00, 0 },
+    { 0xff, 0xff, 0x00, 0 },
+    { 0x00, 0x00, 0xff, 0 },
+    { 0xff, 0x00, 0xff, 0 },
+    { 0x00, 0xff, 0xff, 0 },
+    { 0xff, 0xff, 0xff, 0 },
+};
+
 unsigned short GetNumberOfBits(unsigned int dwMask)
 {
    unsigned short wBits;
@@ -65,6 +86,8 @@ NTSTATUS
 NTAPI
 InitPaletteImpl(VOID)
 {
+    int i;
+
     // Create default palette (20 system colors)
     gppalDefault = PALETTE_AllocPalWithHandle(PAL_INDEXED,
                                               20,
@@ -118,6 +141,24 @@ InitPaletteImpl(VOID)
     appalSurfaceDefault[BMF_8RLE] = gppalDefault;
     appalSurfaceDefault[BMF_JPEG] = &gpalRGB;
     appalSurfaceDefault[BMF_PNG] = &gpalRGB;
+
+    /* Create the default DIB palettes */
+    gppalDIB4 = PALETTE_AllocPalette(PAL_INDEXED, 16, g_palDIB4Template, 0, 0, 0);
+    gppalDIB8 = PALETTE_AllocPalette(PAL_INDEXED, 256, NULL, 0, 0, 0);
+    for (i = 0; i < 256; i++)
+    {
+        if (i < 10 || i >= 246)
+        {
+            gppalDIB8->IndexedColors[i] = g_sysPalTemplate[i < 10 ? i : i - 236];
+        }
+        else
+        {
+            gppalDIB8->IndexedColors[i].peRed = (i & 0x07) << 5;
+            gppalDIB8->IndexedColors[i].peGreen = (i & 0x38) << 2;
+            gppalDIB8->IndexedColors[i].peBlue = i & 0xc0;
+            gppalDIB8->IndexedColors[i].peFlags = 0;
+        }
+    }
 
     return STATUS_SUCCESS;
 }

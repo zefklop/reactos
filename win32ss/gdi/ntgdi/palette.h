@@ -50,7 +50,7 @@ typedef struct _PALETTE
     PALETTEENTRY apalColors[0];
 } PALETTE, *PPALETTE;
 
-extern PALETTE gpalRGB, gpalBGR, gpalRGB555, gpalRGB565, *gppalMono, *gppalDefault;
+extern PALETTE gpalRGB, gpalBGR, gpalRGB555, gpalRGB565, *gppalMono, *gppalDefault, *gppalDIB4, *gppalDIB8;
 extern PPALETTE appalSurfaceDefault[];
 
 #define  PALETTE_UnlockPalette(pPalette) GDIOBJ_vUnlockObject((POBJ)pPalette)
