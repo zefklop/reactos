@@ -1064,6 +1064,10 @@ MI_WS_OWNER(IN PEPROCESS Process)
              (PsGetCurrentThread()->OwnsProcessWorkingSetShared)));
 }
 
+VOID
+NTAPI
+MiInsertInWorkingSetList(_Inout_ PMMSUPPORT Vm, _In_ PVOID Address, _In_ ULONG Protection);
+
 //
 // New ARM3<->RosMM PAGE Architecture
 //
