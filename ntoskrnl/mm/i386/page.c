@@ -277,6 +277,10 @@ MmGetPageTableForProcess(PEPROCESS Process, PVOID Address, BOOLEAN Create, PKIRQ
 
             MI_WRITE_INVALID_PTE(PointerPde, DemandZeroPde);
             // Tiny HACK: Parameter 1 is the architecture specific FaultCode for an access violation (i.e. page is present)
+
+            /* Lock the working set, as this will add this address to it */
+            MiLockProcessWorkingSetUnsafe(Process, PsGetCurrentThread());
+
             Status = MiDispatchFault(0x1,
                                      Pt,
                                      PointerPde,
@@ -288,6 +292,8 @@ MmGetPageTableForProcess(PEPROCESS Process, PVOID Address, BOOLEAN Create, PKIRQ
             DBG_UNREFERENCED_LOCAL_VARIABLE(Status);
             ASSERT(KeAreAllApcsDisabled() == TRUE);
             ASSERT(PointerPde->u.Hard.Valid == 1);
+
+            MiUnlockProcessWorkingSetUnsafe(Process, PsGetCurrentThread());
         }
         return (PULONG)MiAddressToPte(Address);
     }

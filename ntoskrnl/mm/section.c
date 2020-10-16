@@ -1791,9 +1791,6 @@ MmNotPresentFaultSectionView(PMMSUPPORT AddressSpace,
         MmUnlockSectionSegment(Segment);
 
         MmUnlockAddressSpace(AddressSpace);
-        MI_SET_USAGE(MI_USAGE_SECTION);
-        if (Process) MI_SET_PROCESS2(Process->ImageFileName);
-        if (!Process) MI_SET_PROCESS2("Kernel Section");
         Status = MmRequestPageMemoryConsumer(MC_USER, TRUE, &Page);
         if (!NT_SUCCESS(Status))
         {
@@ -1963,9 +1960,6 @@ MmAccessFaultSectionView(PMMSUPPORT AddressSpace,
     /*
      * Allocate a page
      */
-    MI_SET_USAGE(MI_USAGE_SECTION);
-    if (Process) MI_SET_PROCESS2(Process->ImageFileName);
-    if (!Process) MI_SET_PROCESS2("Kernel Section");
     Status = MmRequestPageMemoryConsumer(MC_USER, TRUE, &NewPage);
     if (!NT_SUCCESS(Status))
     {
