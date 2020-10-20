@@ -386,12 +386,15 @@ MiDeleteSystemPageableVm(IN PMMPTE PointerPte,
     return ActualPages;
 }
 
+_Requires_exclusive_lock_held_(CurrentProcess->Vm.WorkingSetMutex)
+_IRQL_requires_(DISPATCH_LEVEL)
 VOID
 NTAPI
-MiDeletePte(IN PMMPTE PointerPte,
-            IN PVOID VirtualAddress,
-            IN PEPROCESS CurrentProcess,
-            IN PMMPTE PrototypePte)
+MiDeletePte(
+	_Inout_ PMMPTE PointerPte,
+	_In_ PVOID VirtualAddress,
+	_In_ PEPROCESS CurrentProcess,
+	_In_ PMMPTE PrototypePte)
 {
     PMMPFN Pfn1;
     MMPTE TempPte;
