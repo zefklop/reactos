@@ -603,6 +603,9 @@ MmDeleteProcessAddressSpace(PEPROCESS Process)
         /* Attach to Process */
         KeAttachProcess(&Process->Pcb);
 
+        /* Lock our working set */
+        MiLockProcessWorkingSet(Process, PsGetCurrentThread());
+
         /* Acquire PFN lock */
         OldIrql = MiAcquirePfnLock();
 
@@ -628,8 +631,9 @@ MmDeleteProcessAddressSpace(PEPROCESS Process)
             ASSERT(pointerPde->u.Hard.Valid == 0);
         }
 
-        /* Release lock */
+        /* Release locks */
         MiReleasePfnLock(OldIrql);
+        MiUnlockProcessWorkingSet(Process, PsGetCurrentThread());
 
         /* Detach */
         KeDetachProcess();

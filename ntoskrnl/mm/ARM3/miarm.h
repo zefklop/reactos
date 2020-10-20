@@ -1064,13 +1064,20 @@ MI_WS_OWNER(IN PEPROCESS Process)
              (PsGetCurrentThread()->OwnsProcessWorkingSetShared)));
 }
 
+_Requires_exclusive_lock_held_(Vm->WorkingSetMutex)
 VOID
 NTAPI
 MiInsertInWorkingSetList(_Inout_ PMMSUPPORT Vm, _In_ PVOID Address, _In_ ULONG Protection);
 
+_Requires_exclusive_lock_held_(Vm->WorkingSetMutex)
 VOID
 NTAPI
 MiRemoveFromWorkingSetList(_Inout_ PMMSUPPORT Vm, _In_ PVOID Address);
+
+_Requires_exclusive_lock_held_(CurrentProcess->Vm.WorkingSetMutex)
+VOID
+NTAPI
+MiInitializeWorkingSetList(IN PEPROCESS CurrentProcess);
 
 //
 // New ARM3<->RosMM PAGE Architecture
