@@ -854,6 +854,11 @@ MmRequestPageMemoryConsumer(
 
 VOID
 NTAPI
+MmWorkingSetManager(VOID);
+extern KEVENT MmWorkingSetManagerEvent;
+
+VOID
+NTAPI
 MiInitBalancerThread(VOID);
 
 VOID

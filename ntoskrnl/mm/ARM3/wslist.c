@@ -19,6 +19,7 @@
 
 /* GLOBALS ********************************************************************/
 PMMWSL MmWorkingSetList;
+KEVENT MmWorkingSetManagerEvent;
 
 /* PRIVATE FUNCTIONS **********************************************************/
 static
@@ -390,4 +391,11 @@ MiInitializeWorkingSetList(IN PEPROCESS CurrentProcess)
 
     /* Mark this as not initializing anymore */
     MmWorkingSetList->LastEntry = MmWorkingSetList->FirstDynamic - 1;
+}
+
+VOID
+NTAPI
+MmWorkingSetManager(VOID)
+{
+       /* For now, do nothing */
 }
