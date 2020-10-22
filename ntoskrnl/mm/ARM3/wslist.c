@@ -391,6 +391,11 @@ MiInitializeWorkingSetList(IN PEPROCESS CurrentProcess)
 
     /* Mark this as not initializing anymore */
     MmWorkingSetList->LastEntry = MmWorkingSetList->FirstDynamic - 1;
+
+    /* We can add this to our list */
+    ExInterlockedInsertTailList(&MmWorkingSetExpansionHead,
+        &CurrentProcess->Vm.WorkingSetExpansionLinks,
+        &MmExpansionLock);
 }
 
 VOID

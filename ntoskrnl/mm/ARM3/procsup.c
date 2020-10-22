@@ -1396,6 +1396,11 @@ MmDeleteProcessAddressSpace2(IN PEPROCESS Process)
 
     //ASSERT(Process->CommitCharge == 0);
 
+    /* Remove us from the list */
+    OldIrql = MiAcquireExpansionLock();
+    RemoveEntryList(&Process->Vm.WorkingSetExpansionLinks);
+    MiReleaseExpansionLock(OldIrql);
+
     /* Acquire the PFN lock */
     OldIrql = MiAcquirePfnLock();
 

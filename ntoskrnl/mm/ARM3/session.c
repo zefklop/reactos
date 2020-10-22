@@ -39,9 +39,8 @@ VOID
 NTAPI
 MiInitializeSessionWsSupport(VOID)
 {
-    /* Initialize the list heads */
+    /* Initialize the list head */
     InitializeListHead(&MiSessionWsList);
-    InitializeListHead(&MmWorkingSetExpansionHead);
 }
 
 BOOLEAN
