@@ -403,9 +403,152 @@ MiInitializeWorkingSetList(IN PEPROCESS CurrentProcess)
         &MmExpansionLock);
 }
 
+static
+VOID
+MiTrimWorkingSet(PMMSUPPORT Vm)
+{
+    PEPROCESS Process = NULL;
+    KAPC_STATE ApcState;
+    ULONG i;
+    PMMWSL WsList;
+
+    /* Attach to the process */
+    if ((Vm != &MmSystemCacheWs) && !Vm->Flags.SessionSpace)
+    {
+        Process = CONTAINING_RECORD(Vm, EPROCESS, Vm);
+        KeStackAttachProcess(&Process->Pcb, &ApcState);
+    }
+
+    /* Lock the WS. */
+    MiLockWorkingSet(PsGetCurrentThread(), Vm);
+    Vm->Flags.BeingTrimmed = 1;
+
+    /* Walk the WsList */
+    WsList = Vm->VmWorkingSetList;
+    for (i = WsList->FirstDynamic; i < WsList->LastEntry; i++)
+    {
+        PMMWSLE Entry = &WsList->Wsle[i];
+        PMMPTE PointerPte;
+        MMPTE TempPte;
+        KIRQL OldIrql;
+        PMMPFN Pfn1;
+        PFN_NUMBER Page;
+        ULONG Protection;
+
+        if (!Entry->u1.e1.Valid)
+            continue;
+
+        /* Only direct entries for now */
+        ASSERT(Entry->u1.e1.Direct == 1);
+
+        /* Check the PTE */
+        PointerPte = MiAddressToPte(Entry->u1.VirtualAddress);
+
+        /* This must be valid */
+        ASSERT(PointerPte->u.Hard.Valid);
+
+        /* If the PTE was accessed, simply reset and that's the end of it */
+        if (PointerPte->u.Hard.Accessed)
+        {
+            Entry->u1.e1.Age = 0;
+            PointerPte->u.Hard.Accessed = 0;
+            KeInvalidateTlbEntry(Entry->u1.VirtualAddress);
+            continue;
+        }
+
+        /* If the entry is not so old, just age it */
+        if (Entry->u1.e1.Age < 3)
+        {
+            Entry->u1.e1.Age++;
+            continue;
+        }
+
+        if ((Entry->u1.e1.LockedInMemory) || (Entry->u1.e1.LockedInWs))
+        {
+            /* This one is locked. Next time, maybe... */
+            continue;
+        }
+
+        /* FIXME: Invalidating PDEs breaks legacy MMs */
+        if (MI_IS_PAGE_TABLE_ADDRESS(Entry->u1.VirtualAddress))
+            continue;
+
+        /* Please put yourself aside and make place for the younger ones */
+        Page = PFN_FROM_PTE(PointerPte);
+        OldIrql = MiAcquirePfnLock();
+
+        Pfn1 = MiGetPfnEntry(Page);
+
+        /* Not supported yet */
+        ASSERT(Pfn1->u3.e1.PrototypePte == 0);
+        ASSERT(!MI_IS_ROS_PFN(Pfn1));
+
+        /* FIXME: Remove this hack when possible */
+        if (Pfn1->Wsle.u1.e1.LockedInMemory || (Pfn1->Wsle.u1.e1.LockedInWs))
+        {
+            MiReleasePfnLock(OldIrql);
+            continue;
+        }
+
+        /* We can remove it from the list. Save Protection first */
+        Protection = Entry->u1.e1.Protection;
+        MiRemoveFromWorkingSetList(Vm, Entry->u1.VirtualAddress);
+
+        /* Dirtify the page, if needed */
+        if (PointerPte->u.Hard.Dirty)
+            Pfn1->u3.e1.Modified = 1;
+
+        /* Make this a transition PTE */
+        MI_MAKE_TRANSITION_PTE(&TempPte, Page, Protection);
+        MI_WRITE_INVALID_PTE(PointerPte, TempPte);
+        KeInvalidateTlbEntry(MiAddressToPte(PointerPte));
+
+        /* Drop the share count. This will take care of putting it in the standby or modified list. */
+        MiDecrementShareCount(Pfn1, Page);
+
+        MiReleasePfnLock(OldIrql);
+    }
+
+    /* We're done */
+    Vm->Flags.BeingTrimmed = 0;
+    MiUnlockWorkingSet(PsGetCurrentThread(), Vm);
+
+    if (Process)
+        KeUnstackDetachProcess(&ApcState);
+}
+
 VOID
 NTAPI
 MmWorkingSetManager(VOID)
 {
-       /* For now, do nothing */
+    PLIST_ENTRY VmListEntry;
+    KIRQL OldIrql;
+    PMMSUPPORT Vm = NULL;
+
+    OldIrql = MiAcquireExpansionLock();
+    for (VmListEntry = MmWorkingSetExpansionHead.Flink;
+        VmListEntry != &MmWorkingSetExpansionHead;
+        VmListEntry = VmListEntry->Flink)
+    {
+        Vm = CONTAINING_RECORD(VmListEntry, MMSUPPORT, WorkingSetExpansionLinks);
+
+        if (Vm->Flags.SessionSpace || Vm == &MmSystemCacheWs)
+        {
+            /* FIXME: Unsupported. */
+            continue;
+        }
+
+        /* Remove it from the list */
+        /* FIXME: LRU method is LAME. Implement heuristic to prioritize trimming */
+        /* FIXME: One WS at a time is SUPER-LAME */
+        RemoveEntryList(&Vm->WorkingSetExpansionLinks);
+        InsertTailList(&MmWorkingSetExpansionHead, &Vm->WorkingSetExpansionLinks);
+        break;
+    }
+    MiReleaseExpansionLock(OldIrql);
+
+    if (Vm)
+    {
+        MiTrimWorkingSet(Vm);
+    }
 }
