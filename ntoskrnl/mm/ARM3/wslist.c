@@ -91,19 +91,16 @@ MiGetFirstFreeWsleIndex(_Inout_ PMMSUPPORT Vm)
         ASSERT(WsleEntry->u1.Free.PreviousFree == MMWSLE_PREVIOUS_FREE_INVALID);
         ASSERT(WsleEntry->u1.Free.NextFree > WsIndex);
 
-        if (WsleEntry->u1.Free.NextFree < WsList->LastEntry)
+        if (WsleEntry->u1.Free.NextFree != MMWSLE_NEXT_FREE_INVALID)
         {
-            PMMWSLE_FREE_ENTRY NextFree = &WsList->Wsle[WsleEntry->u1.Free.NextFree].u1.Free;
+            PMMWSLE NextFree = &WsList->Wsle[WsleEntry->u1.Free.NextFree];
 
-            ASSERT(NextFree->MustBeZero == 0);
-            NextFree->PreviousFree = MMWSLE_PREVIOUS_FREE_INVALID;
+            ASSERT(NextFree->u1.Free.MustBeZero == 0);
+            ASSERT(NextFree->u1.Free.PreviousFree == (NextFree - WsleEntry) % MMWSLE_PER_PAGE);
+            NextFree->u1.Free.PreviousFree = MMWSLE_PREVIOUS_FREE_INVALID;
+        }
 
-            WsList->FirstFree = WsleEntry->u1.Free.NextFree;
-        }
-        else
-        {
-        	WsList->FirstFree = MMWSLE_NEXT_FREE_INVALID;
-        }
+        WsList->FirstFree = WsleEntry->u1.Free.NextFree;
 
         return WsIndex;
     }
@@ -171,14 +168,25 @@ MiShrinkWorkingSet(_Inout_ PMMSUPPORT Vm)
     if (LastValid != WsList->LastEntry)
     {
         /* There was a hole behind us. Handle this */
+        PMMWSLE Entry = &WsList->Wsle[LastValid + 1];
+
         if (WsList->FirstFree == LastValid + 1)
         {
             /* This was actually our first free entry. */
             WsList->FirstFree = MMWSLE_NEXT_FREE_INVALID;
         }
+        else
+        {
+            PMMWSLE PreviousFree = Entry - Entry->u1.Free.PreviousFree;
+            while (PreviousFree->u1.e1.Valid)
+                PreviousFree -= MMWSLE_PER_PAGE;
+
+            ASSERT(PreviousFree->u1.Free.NextFree == LastValid + 1);
+            PreviousFree->u1.Free.NextFree = MMWSLE_NEXT_FREE_INVALID;
+        }
 
         /* Nuke everyone */
-        RtlZeroMemory(&WsList->Wsle[LastValid + 1], (WsList->LastEntry - LastValid) * sizeof(MMWSLE));
+        RtlZeroMemory(Entry, (WsList->LastEntry - LastValid) * sizeof(MMWSLE));
         WsList->LastEntry = LastValid;
     }
 
@@ -301,10 +309,8 @@ MiRemoveFromWorkingSetList(
             ASSERT((NextFree != NULL) || (PreviousFree->u1.Free.NextFree == MMWSLE_NEXT_FREE_INVALID));
             PreviousFree->u1.Free.NextFree = WsIndex;
             /* The PreviousFree entry is a relative index into the current page */
-            if ((WsIndex - PreviousFreeIndex) < MMWSLE_PER_PAGE)
-            	WsleEntry->u1.Free.PreviousFree = WsIndex - PreviousFreeIndex;
-            else
-            	WsleEntry->u1.Free.PreviousFree = MMWSLE_PREVIOUS_FREE_INVALID;
+            WsleEntry->u1.Free.PreviousFree = (WsIndex - PreviousFreeIndex) % MMWSLE_PER_PAGE;
+            ASSERT(WsleEntry->u1.Free.PreviousFree < MMWSLE_PREVIOUS_FREE_INVALID);
         }
         else
         {
@@ -318,10 +324,9 @@ MiRemoveFromWorkingSetList(
             ULONG NextFreeIndex = NextFree - WsList->Wsle;
 
             /* The PreviousFree entry is a relative index into the current page */
-            if ((NextFreeIndex - WsIndex) < MMWSLE_PER_PAGE)
-                NextFree->u1.Free.PreviousFree = NextFreeIndex - WsIndex;
+            NextFree->u1.Free.PreviousFree = (NextFreeIndex - WsIndex) % MMWSLE_PER_PAGE;
 
-            WsleEntry->u1.Free.NextFree = NextFree - WsList->Wsle;
+            WsleEntry->u1.Free.NextFree = (NextFree - WsList->Wsle);
         }
         else
         {
