@@ -104,6 +104,28 @@ ULONG MmCompatibleProtectionMask[8] =
     PAGE_EXECUTE_READ | PAGE_EXECUTE_WRITECOPY
 };
 
+static
+CHAR
+MmSectionCharacteristicsToProtectionMask[16] =
+{
+    MM_NOACCESS,          /* 0 = NONE */
+    MM_NOACCESS,          /* 1 = SHARED */
+    MM_EXECUTE,           /* 2 = EXECUTABLE */
+    MM_EXECUTE,           /* 3 = EXECUTABLE, SHARED */
+    MM_READONLY,          /* 4 = READABLE */
+    MM_READONLY,          /* 5 = READABLE, SHARED */
+    MM_EXECUTE_READ,      /* 6 = READABLE, EXECUTABLE */
+    MM_EXECUTE_READ,      /* 7 = READABLE, EXECUTABLE, SHARED */
+    MM_WRITECOPY,         /* 8 = WRITABLE */
+    MM_READWRITE,         /* 9 = WRITABLE, SHARED */
+    MM_EXECUTE_WRITECOPY, /* 10 = WRITABLE, EXECUTABLE */
+    MM_EXECUTE_READWRITE, /* 11 = WRITABLE, EXECUTABLE, SHARED */
+    MM_WRITECOPY,         /* 12 = WRITABLE, READABLE */
+    MM_READWRITE,         /* 13 = WRITABLE, READABLE, SHARED */
+    MM_EXECUTE_WRITECOPY, /* 14 = WRITABLE, READABLE, EXECUTABLE */
+    MM_EXECUTE_READWRITE, /* 15 = WRITABLE, READABLE, EXECUTABLE, SHARED */
+};
+
 MMSESSION MmSession;
 KGUARDED_MUTEX MmSectionCommitMutex;
 MM_AVL_TABLE MmSectionBasedRoot;
@@ -1276,6 +1298,101 @@ MiLoadUserSymbols(IN PCONTROL_AREA ControlArea,
     }
 }
 
+static
+NTSTATUS
+NTAPI
+MiMapViewOfImageSection(
+    _In_ PCONTROL_AREA ControlArea,
+    _In_ PEPROCESS Process,
+    _Inout_ PVOID *BaseAddress,
+    _Inout_ PLARGE_INTEGER SectionOffset,
+    _Inout_ PSIZE_T ViewSize,
+    _In_ PSECTION Section,
+    _In_ SECTION_INHERIT InheritDisposition,
+    _In_ ULONG ProtectionMask,
+    _In_ SIZE_T CommitSize,
+    _In_ ULONG_PTR ZeroBits,
+    _In_ ULONG AllocationType)
+{
+    NTSTATUS Status;
+    PSEGMENT Segment;
+    PMMVAD_LONG Vad;
+    ULONG_PTR InsertAddress;
+
+    /* Check for invalid address */
+    if (Section->u.Flags.Based && (*BaseAddress != 0) &&
+        (*BaseAddress != (PVOID)(Section->Address.StartingVpn << PAGE_SHIFT)))
+    {
+        DPRINT1("Section is BASED, address given: 0x%p - Based address: 0x%p.\n",
+                *BaseAddress, (PVOID)(Section->Address.StartingVpn << PAGE_SHIFT));
+        return STATUS_INVALID_ADDRESS;
+    }
+
+    /* First, increase the map count. No purging is supported yet */
+    Status = MiCheckPurgeAndUpMapCount(ControlArea, FALSE);
+    if (!NT_SUCCESS(Status))
+        return Status;
+
+    Segment = ControlArea->Segment;
+
+    /* Allocate a Vad */
+    Vad = ExAllocatePoolZero(NonPagedPool, sizeof(*Vad), 'ldaV');
+    if (!Vad)
+    {
+        MiDereferenceControlArea(ControlArea);
+        return STATUS_NO_MEMORY;
+    }
+    /* set it up */
+    Vad->u.VadFlags.VadType = VadImageMap;
+    /* The protection is set in the PTEs */
+    Vad->u.VadFlags.Protection = 0;
+
+    /* This hack for the old Mm */
+    Vad->u4.Banked = (PVOID)(ULONG_PTR)0xDEADBABEDEADBABEULL;
+
+    /* Set the PTEs. We allocated all of them contiguously. */
+    Vad->FirstPrototypePte = Segment->PrototypePte;
+    Vad->LastContiguousPte = Vad->FirstPrototypePte + Segment->TotalNumberOfPtes - 1;
+
+    /* Now choose a place to insert that. Try the preferred address */
+    if (*BaseAddress != NULL)
+        InsertAddress = (ULONG_PTR)*BaseAddress;
+    else
+        InsertAddress = (ULONG_PTR)Segment->BasedAddress;
+
+    Status = MiInsertVadEx((PMMVAD)Vad,
+                           &InsertAddress,
+                           Segment->SizeOfSegment,
+                           MAXULONG_PTR >> ZeroBits,
+                           PAGE_SIZE,
+                           AllocationType);
+    if (!NT_SUCCESS(Status) && !Section->u.Flags.Based)
+    {
+        InsertAddress = 0;
+        Status = MiInsertVadEx((PMMVAD)Vad,
+                               &InsertAddress,
+                               Segment->SizeOfSegment,
+                               MAXULONG_PTR >> ZeroBits,
+                               MM_VIRTMEM_GRANULARITY,
+                               AllocationType);
+        if (NT_SUCCESS(Status))
+            Status = STATUS_IMAGE_NOT_AT_BASE;
+    }
+
+    if (NT_SUCCESS(Status))
+    {
+        *BaseAddress = (PVOID)InsertAddress;
+        *ViewSize = Segment->SizeOfSegment;
+    }
+    else
+    {
+        ExFreePoolWithTag(Vad, 'ldaV');
+        MiDereferenceControlArea(ControlArea);
+    }
+
+    return Status;
+}
+
 NTSTATUS
 NTAPI
 MiMapViewOfDataSection(IN PCONTROL_AREA ControlArea,
@@ -1543,6 +1660,720 @@ MiCreateDataFileMap(IN PFILE_OBJECT File,
 }
 
 static
+NTSTATUS
+MiReadPartialFileHeader(
+    _In_ PFILE_OBJECT File,
+    _In_ ULONG Offset,
+    _In_ ULONG Length,
+    _In_ PVOID BaseAddress)
+{
+    LARGE_INTEGER FileOffset;
+    PMDL Mdl;
+    ULONG i;
+    KEVENT ReadEvent;
+    NTSTATUS Status;
+    IO_STATUS_BLOCK Iosb;
+    PMMPTE PteBase = MiAddressToPte(BaseAddress);
+
+    FileOffset.QuadPart = PAGE_ROUND_DOWN(Offset);
+    Mdl = IoAllocateMdl(NULL, Length + Offset - FileOffset.QuadPart, FALSE, FALSE, NULL);
+    for (i = 0; i < BYTES_TO_PAGES(Length); i++)
+    {
+        MMPTE TempPte = PteBase[i];
+        MmGetMdlPfnArray(Mdl)[i] = TempPte.u.Hard.PageFrameNumber;
+    }
+    Mdl->MdlFlags |= MDL_PAGES_LOCKED | MDL_IO_PAGE_READ;
+
+    KeInitializeEvent(&ReadEvent, NotificationEvent, FALSE);
+    Status = IoPageRead(File, Mdl, &FileOffset, &ReadEvent, &Iosb);
+    if (Status == STATUS_PENDING)
+    {
+        KeWaitForSingleObject(&ReadEvent, WrPageIn, KernelMode, FALSE, NULL);
+        Status = Iosb.Status;
+    }
+    if (Mdl->MdlFlags & MDL_MAPPED_TO_SYSTEM_VA)
+        MmUnmapLockedPages(Mdl->MappedSystemVa, Mdl);
+
+    IoFreeMdl(Mdl);
+
+    return Status;
+}
+
+static
+NTSTATUS
+MiAllocatePagesForImageRead(
+    _Inout_ PVOID *BaseAddress,
+    _In_ ULONG PreviousSize,
+    _In_ ULONG NewSize)
+{
+    PFN_NUMBER NewPageCount = BYTES_TO_PAGES(NewSize);
+    PFN_NUMBER PreviousPageCount = BYTES_TO_PAGES(PreviousSize);
+    PMMPTE OldPointerPte;
+
+    if (*BaseAddress)
+    {
+        ASSERT(PreviousPageCount != 0);
+        OldPointerPte = MiAddressToPte(*BaseAddress);
+    }
+    else
+    {
+        ASSERT(PreviousPageCount == 0);
+        OldPointerPte = NULL;
+    }
+
+    if (NewPageCount > PreviousPageCount)
+    {
+        ULONG i;
+        KIRQL OldIrql;
+        MMPTE TempPte;
+
+        /* Allocate more pages */
+        PMMPTE NewPointerPte = MiReserveSystemPtes(NewPageCount, SystemPteSpace);
+        if (!NewPointerPte)
+        {
+            return STATUS_NO_MEMORY;
+        }
+
+        for (i = 0; i < PreviousPageCount; i++)
+        {
+            TempPte = OldPointerPte[i];
+            MI_WRITE_VALID_PTE(&NewPointerPte[i], TempPte);
+        }
+
+        OldIrql = MiAcquirePfnLock();
+        for (i = PreviousPageCount; i < NewPageCount; i++)
+        {
+            PFN_NUMBER Page = MiRemoveAnyPage(MI_GET_NEXT_COLOR());
+            if (!Page)
+            {
+                /* Rollback */
+                ULONG j;
+                for (j = PreviousPageCount; j < i; j++)
+                {
+                    TempPte = NewPointerPte[j];
+                    MI_SET_PFN_DELETED(MiGetPfnEntry(TempPte.u.Hard.PageFrameNumber));
+                    MiInsertPageInFreeList(TempPte.u.Hard.PageFrameNumber);
+                }
+                MiReleasePfnLock(OldIrql);
+                MiReleaseSystemPtes(NewPointerPte, NewPageCount, SystemPteSpace);
+                return STATUS_NO_MEMORY;
+            }
+            TempPte = ValidKernelPte;
+            TempPte.u.Hard.PageFrameNumber = Page;
+            MI_WRITE_VALID_PTE(&NewPointerPte[i], TempPte);
+        }
+        MiReleasePfnLock(OldIrql);
+
+        /* Update our mapping */
+        if (OldPointerPte != NULL)
+            MiReleaseSystemPtes(OldPointerPte, PreviousPageCount, SystemPteSpace);
+        *BaseAddress = MiPteToAddress(NewPointerPte);
+    }
+
+    return STATUS_SUCCESS;
+}
+
+static
+VOID
+MiFreePagesForImageRead(_In_ PVOID BaseAddress, _In_ ULONG Size)
+{
+    PMMPTE PointerPte = MiAddressToPte(BaseAddress);
+    ULONG i;
+    KIRQL OldIrql;
+    PFN_NUMBER PageCount = BYTES_TO_PAGES(Size);
+
+    OldIrql = MiAcquirePfnLock();
+    for (i = 0; i < PageCount; i++)
+    {
+        MMPTE TempPte = PointerPte[i];
+        MI_SET_PFN_DELETED(MiGetPfnEntry(TempPte.u.Hard.PageFrameNumber));
+        MiInsertPageInFreeList(TempPte.u.Hard.PageFrameNumber);
+    }
+    MiReleasePfnLock(OldIrql);
+
+    MiReleaseSystemPtes(PointerPte, PageCount, SystemPteSpace);
+}
+
+static
+NTSTATUS
+MiReadImageFileHeader(_In_ PFILE_OBJECT File,
+                      _Out_ PVOID* ImageBase,
+                      _Out_ ULONG* HeaderSize)
+{
+    PFSRTL_COMMON_FCB_HEADER FcbHeader;
+    NTSTATUS Status;
+    PIMAGE_DOS_HEADER DosHeader;
+    PIMAGE_NT_HEADERS NtHeader;
+    ULONG NewHeaderSize;
+
+    /* Check that the file is large enough for a PE header */
+    FcbHeader = File->FsContext;
+    if (FcbHeader == NULL)
+        return STATUS_INVALID_IMAGE_NOT_MZ;
+    if (FcbHeader->FileSize.QuadPart < sizeof(IMAGE_DOS_HEADER))
+        return STATUS_INVALID_IMAGE_NOT_MZ;
+
+    /* Reserve one PTE to read the DOS header */
+    *ImageBase = NULL;
+    *HeaderSize = 0;
+    Status = MiAllocatePagesForImageRead(ImageBase, *HeaderSize, sizeof(*DosHeader));
+    if (!NT_SUCCESS(Status))
+        return Status;
+
+    /* Perform Paging I/O */
+    Status = MiReadPartialFileHeader(File, 0, sizeof(*DosHeader), *ImageBase);
+    if (!NT_SUCCESS(Status))
+    {
+        DPRINT1("Failed to read DOS header of file %wZ\n", &File->FileName);
+        goto Failure;
+    }
+    DosHeader = *ImageBase;
+    if (DosHeader->e_magic != IMAGE_DOS_SIGNATURE)
+    {
+        Status = STATUS_INVALID_IMAGE_NOT_MZ;
+        goto Failure;
+    }
+    if (DosHeader->e_lfanew <= 0)
+    {
+        /* Whatever is here is not valid */
+        Status = STATUS_INVALID_IMAGE_PROTECT;
+        goto Failure;
+    }
+
+    *HeaderSize = sizeof(*DosHeader);
+    NewHeaderSize = DosHeader->e_lfanew + RTL_SIZEOF_THROUGH_FIELD(IMAGE_NT_HEADERS, FileHeader);
+    if (NewHeaderSize > FcbHeader->FileSize.QuadPart)
+    {
+        /* We can't read up to there, fail. */
+        Status = STATUS_INVALID_IMAGE_PROTECT;
+        goto Failure;
+    }
+
+    /* Reserve some more space to read the NT header */
+    Status = MiAllocatePagesForImageRead(ImageBase, *HeaderSize, NewHeaderSize);
+    if (!NT_SUCCESS(Status))
+        return Status;
+
+    /* Perform a new paged I/O. */
+    Status = MiReadPartialFileHeader(File, *HeaderSize, NewHeaderSize - *HeaderSize, Add2Ptr(*ImageBase, *HeaderSize));
+    if (!NT_SUCCESS(Status))
+    {
+        DPRINT1("Failed reading the NT header for %wZ\n", &File->FileName);
+        goto Failure;
+    }
+
+    DosHeader = *ImageBase;
+    NtHeader = Add2Ptr(DosHeader, DosHeader->e_lfanew);
+    if (NtHeader->Signature != IMAGE_NT_SIGNATURE)
+    {
+        Status = STATUS_INVALID_IMAGE_PROTECT;
+        goto Failure;
+    }
+    *HeaderSize = NewHeaderSize;
+
+    /* Read the optional header, if any */
+    if (NtHeader->FileHeader.SizeOfOptionalHeader != 0)
+    {
+        NewHeaderSize = *HeaderSize + NtHeader->FileHeader.SizeOfOptionalHeader;
+        if (NewHeaderSize > FcbHeader->FileSize.QuadPart)
+        {
+            /* We can't read up to there, fail. */
+            Status = STATUS_INVALID_IMAGE_FORMAT;
+            goto Failure;
+        }
+
+        /* Reserve some more space */
+        Status = MiAllocatePagesForImageRead(ImageBase, *HeaderSize, NewHeaderSize);
+        if (!NT_SUCCESS(Status))
+        {
+            goto Failure;
+        }
+
+        Status = MiReadPartialFileHeader(File,
+                                         *HeaderSize,
+                                         NewHeaderSize - *HeaderSize,
+                                         Add2Ptr(*ImageBase, *HeaderSize));
+        if (!NT_SUCCESS(Status))
+        {
+            DPRINT1("Failed reading the optional header for %wZ\n", &File->FileName);
+            goto Failure;
+        }
+
+        *HeaderSize = NewHeaderSize;
+
+        /* Update pointers */
+        DosHeader = *ImageBase;
+        NtHeader = Add2Ptr(DosHeader, DosHeader->e_lfanew);
+    }
+
+    /* Read the section headers */
+    if (NtHeader->FileHeader.NumberOfSections)
+    {
+        NewHeaderSize = *HeaderSize + (NtHeader->FileHeader.NumberOfSections * sizeof(IMAGE_SECTION_HEADER));
+        if (NewHeaderSize > FcbHeader->FileSize.QuadPart)
+        {
+            /* We can't read up to there, fail. */
+            Status = STATUS_INVALID_IMAGE_FORMAT;
+            goto Failure;
+        }
+
+        /* Reserve some more space */
+        Status = MiAllocatePagesForImageRead(ImageBase, *HeaderSize, NewHeaderSize);
+        if (!NT_SUCCESS(Status))
+        {
+            goto Failure;
+        }
+
+        Status = MiReadPartialFileHeader(File,
+                                         *HeaderSize,
+                                         NewHeaderSize - *HeaderSize,
+                                         Add2Ptr(*ImageBase, *HeaderSize));
+        if (!NT_SUCCESS(Status))
+        {
+            DPRINT1("Failed reading the optional header for %wZ\n", &File->FileName);
+            goto Failure;
+        }
+
+        *HeaderSize = NewHeaderSize;
+    }
+
+    return STATUS_SUCCESS;
+
+Failure:
+    MiFreePagesForImageRead(*ImageBase, *HeaderSize);
+    return Status;
+}
+
+static
+int
+__cdecl
+compare_section_headers(
+    _In_ const void* _h1,
+    _In_ const void* _h2)
+{
+    const IMAGE_SECTION_HEADER* h1 = _h1;
+    const IMAGE_SECTION_HEADER* h2 = _h2;
+    return (int)(h1->VirtualAddress - h2->VirtualAddress);
+}
+
+static
+NTSTATUS
+NTAPI
+MiCreateImageFileMap(
+    _In_ PFILE_OBJECT File,
+    _In_ ULONG SectionPageProtection,
+    _In_ ULONG AllocationAttributes,
+    _Out_ PSEGMENT* Segment)
+{
+    PCONTROL_AREA ControlArea = NULL;
+    ULONG ControlAreaSize;
+    NTSTATUS Status;
+    PVOID ImageBase;
+    ULONG HeaderSize;
+    ULONG FileAlignment, SectionAlignment;
+    PIMAGE_NT_HEADERS NtHeader;
+    PSUBSECTION SubSections;
+    PMMPTE ThePtes, CurrentPte;
+    ULONG i;
+    ULONG SizeOfImage, SizeOfHeaders;
+    PIMAGE_SECTION_HEADER SectionHeaders;
+    PSECTION_IMAGE_INFORMATION ImageInformation;
+
+    /* This must have been checked before */
+    ASSERT(File->SectionObjectPointer != NULL);
+
+    *Segment = NULL;
+
+    /* Read the NT headers */
+    Status = MiReadImageFileHeader(File, &ImageBase, &HeaderSize);
+    if (!NT_SUCCESS(Status))
+    {
+        FsRtlReleaseFile(File);
+        return Status;
+    }
+
+    Status = RtlImageNtHeaderEx(0, ImageBase, HeaderSize, &NtHeader);
+    if (!NT_SUCCESS(Status))
+    {
+        goto Failure;
+    }
+
+    /* Check that this is actually an image */
+    if (!(NtHeader->FileHeader.Characteristics & IMAGE_FILE_EXECUTABLE_IMAGE))
+    {
+        Status = STATUS_INVALID_IMAGE_PROTECT;
+        goto Failure;
+    }
+
+    /* Check the machine */
+#ifdef _M_IX86
+    if (NtHeader->FileHeader.Machine != IMAGE_FILE_MACHINE_I386)
+#elif defined(_M_AMD64)
+    if ((NtHeader->FileHeader.Machine != IMAGE_FILE_MACHINE_I386)
+        && (NtHeader->FileHeader.Machine != IMAGE_FILE_MACHINE_AMD64))
+#else
+    /* FIXME: Anyone in for ARM ? */
+#error "Add support for your favourite architecture here"
+#endif
+    {
+        Status = STATUS_INVALID_IMAGE_FORMAT;
+        goto Failure;
+    }
+
+    /* Make sure we actually have sections */
+    if (!NtHeader->FileHeader.NumberOfSections)
+    {
+        DPRINT1("Image %wZ doesn't have sections!\n", &File->FileName);
+        Status = STATUS_INVALID_IMAGE_FORMAT;
+        goto Failure;
+    }
+
+    /* Check optional header magic */
+    if (NtHeader->FileHeader.SizeOfOptionalHeader >= RTL_SIZEOF_THROUGH_FIELD(IMAGE_OPTIONAL_HEADER, Magic))
+    {
+        if ((NtHeader->OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR32_MAGIC)
+#ifdef _WIN64
+            && (NtHeader->OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR64_MAGIC)
+#endif
+        )
+        {
+            Status = STATUS_INVALID_IMAGE_FORMAT;
+            goto Failure;
+        }
+    }
+
+    /* Get the file alignment */
+    if (NtHeader->FileHeader.SizeOfOptionalHeader >= RTL_SIZEOF_THROUGH_FIELD(IMAGE_OPTIONAL_HEADER, FileAlignment))
+        FileAlignment = NtHeader->OptionalHeader.FileAlignment;
+    else
+        FileAlignment = 0x200;
+    /* Check it's in the 512-64k range and a power of two */
+    if ((FileAlignment < 0x200) || (FileAlignment > 0x10000) || ((FileAlignment & (FileAlignment - 1)) != 0))
+    {
+        DPRINT1("File Alignment of image %wZ is invalid: 0x%X.\n", &File->FileName, FileAlignment);
+        Status = STATUS_INVALID_IMAGE_FORMAT;
+        goto Failure;
+    }
+
+    /* Get Section alignment */
+    if (NtHeader->FileHeader.SizeOfOptionalHeader >= RTL_SIZEOF_THROUGH_FIELD(IMAGE_OPTIONAL_HEADER, SectionAlignment))
+        SectionAlignment = NtHeader->OptionalHeader.SectionAlignment;
+    else
+        SectionAlignment = PAGE_SIZE;
+
+    /* Check that it's compatible with file alignment */
+    if (SectionAlignment & (FileAlignment - 1))
+    {
+        DPRINT1("Section alignment 0x%X and File alignment 0x%X don't match for file %wZ: 0x%X, 0x%X\n", SectionAlignment, FileAlignment, &File->FileName);
+        Status = STATUS_INVALID_IMAGE_FORMAT;
+        goto Failure;
+    }
+
+    /* Check size of headers */
+    if (NtHeader->FileHeader.SizeOfOptionalHeader >= RTL_SIZEOF_THROUGH_FIELD(IMAGE_OPTIONAL_HEADER, SizeOfHeaders))
+    {
+        SizeOfHeaders = NtHeader->OptionalHeader.SizeOfHeaders;
+        /* Check this matches */
+        if (SizeOfHeaders != ALIGN_UP_BY(HeaderSize, FileAlignment))
+        {
+            DPRINT1("Wrong header size 0x%X, read 0x%X from %wZ.\n", SizeOfHeaders, HeaderSize, &File->FileName);
+            Status = STATUS_INVALID_IMAGE_FORMAT;
+            goto Failure;
+        }
+    }
+    else
+    {
+        SizeOfHeaders = ALIGN_UP_BY(HeaderSize, FileAlignment);
+    }
+
+    /* Get the section headers and fix them */
+    SectionHeaders = IMAGE_FIRST_SECTION(NtHeader);
+    for (i = 0; i < NtHeader->FileHeader.NumberOfSections; i++)
+    {
+        /* If it's initialized, it can't be uninitialized. THANK YOU CAPTAIN OBVIOUS */
+        if (SectionHeaders[i].Characteristics & IMAGE_SCN_CNT_INITIALIZED_DATA)
+            SectionHeaders[i].Characteristics &= ~IMAGE_SCN_CNT_UNINITIALIZED_DATA;
+
+        if ((SectionHeaders[i].Characteristics & (IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE)) == 0)
+        {
+            /* Set protection accordingly to section content */
+            if (SectionHeaders[i].Characteristics & IMAGE_SCN_CNT_CODE)
+                SectionHeaders[i].Characteristics |= IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ;
+            else if(SectionHeaders[i].Characteristics & (IMAGE_SCN_CNT_INITIALIZED_DATA | IMAGE_SCN_CNT_UNINITIALIZED_DATA))
+                SectionHeaders[i].Characteristics |= IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE;
+        }
+
+        /* Fix virtual size up. */
+        if (SectionHeaders[i].Misc.VirtualSize == 0)
+            SectionHeaders[i].Misc.VirtualSize = ALIGN_UP_BY(SectionHeaders[i].SizeOfRawData, SectionAlignment);
+        else
+            SectionHeaders[i].Misc.VirtualSize = ALIGN_UP_BY(SectionHeaders[i].Misc.VirtualSize, SectionAlignment);
+
+        /* Check virtual address */
+        if (SectionHeaders[i].VirtualAddress & (SectionAlignment - 1))
+        {
+            DPRINT1("Virtual address of section %.*s of %wZ is not section-aligned!\n",
+                    sizeof(SectionHeaders[i].Name), SectionHeaders[i].Name, &File->FileName);
+            Status = STATUS_INVALID_IMAGE_FORMAT;
+            goto Failure;
+        }
+
+        /* Check raw data */
+        if (SectionHeaders[i].Characteristics & IMAGE_SCN_CNT_INITIALIZED_DATA)
+        {
+            if (SectionHeaders[i].SizeOfRawData & (FileAlignment - 1))
+            {
+                DPRINT1("Size of raw data of section %.*s of %wZ is not file-aligned!\n",
+                        sizeof(SectionHeaders[i].Name), SectionHeaders[i].Name, &File->FileName);
+                Status = STATUS_INVALID_IMAGE_FORMAT;
+                goto Failure;
+            }
+
+            if (SectionHeaders[i].PointerToRawData & (FileAlignment - 1))
+            {
+                DPRINT1("Pointer to raw data of section %.*s of %wZ is not file-aligned!\n",
+                        sizeof(SectionHeaders[i].Name), SectionHeaders[i].Name, &File->FileName);
+                Status = STATUS_INVALID_IMAGE_FORMAT;
+                goto Failure;
+            }
+        }
+    }
+
+    /* Sort them */
+    qsort(SectionHeaders, NtHeader->FileHeader.NumberOfSections, sizeof(SectionHeaders[0]), compare_section_headers);
+
+    /* Check that there is no hole nor overlap */
+    if (SectionHeaders[0].VirtualAddress != ALIGN_UP_BY(SizeOfHeaders, SectionAlignment))
+    {
+        DPRINT1("First section of %wZ is not right after the headers.\n", &File->FileName);
+        Status = STATUS_INVALID_IMAGE_FORMAT;
+        goto Failure;
+    }
+    for (i = 1; i < NtHeader->FileHeader.NumberOfSections; i++)
+    {
+        if (SectionHeaders[i].VirtualAddress != (SectionHeaders[i-1].VirtualAddress + SectionHeaders[i-1].Misc.VirtualSize))
+        {
+            DPRINT1("Hole detected between section %*s and %*s in file %wZ.\n",
+                    sizeof(SectionHeaders[i].Name), SectionHeaders[i].Name,
+                    sizeof(SectionHeaders[i-1].Name), SectionHeaders[i-1].Name,
+                    &File->FileName);
+            Status = STATUS_INVALID_IMAGE_FORMAT;
+            goto Failure;
+        }
+    }
+
+    /* Get the image size */
+    if (NtHeader->FileHeader.SizeOfOptionalHeader >= RTL_SIZEOF_THROUGH_FIELD(IMAGE_OPTIONAL_HEADER, SizeOfImage))
+    {
+        PIMAGE_SECTION_HEADER LastSectionHeader = &SectionHeaders[NtHeader->FileHeader.NumberOfSections - 1];
+
+        SizeOfImage = NtHeader->OptionalHeader.SizeOfImage;
+        /* Make sure the last section goes up to that */
+        if ((LastSectionHeader->VirtualAddress + LastSectionHeader->Misc.VirtualSize) != SizeOfImage)
+        {
+            DPRINT1("Last section of image file %wZ doesn't fit to SizeOfImage.\n", &File->FileName);
+            Status = STATUS_INVALID_IMAGE_FORMAT;
+            goto Failure;
+        }
+    }
+    else
+    {
+        SizeOfImage = SizeOfHeaders;
+        for (i = 0; i < NtHeader->FileHeader.NumberOfSections; i++)
+            SizeOfImage += SectionHeaders[i].Misc.VirtualSize;
+    }
+
+    /* Allocate the new Control Area, with the subsections and the PTEs */
+    /* One more subsection for the image headers */
+    ControlAreaSize = sizeof(*ControlArea) +
+        sizeof(SUBSECTION) * (NtHeader->FileHeader.NumberOfSections + 1) +
+        sizeof(MMPTE) * BYTES_TO_PAGES(SizeOfImage);
+    ControlArea = ExAllocatePoolZero(NonPagedPool, ControlAreaSize, 'tCmM');
+    if (!ControlArea)
+    {
+        Status = STATUS_NO_MEMORY;
+        goto Failure;
+    }
+
+    /* A bit of setup */
+    ControlArea->u.Flags.BeingCreated = 1;
+    ControlArea->u.Flags.File = 1;
+    ControlArea->u.Flags.Image = 1;
+    if (AllocationAttributes & SEC_BASED)
+        ControlArea->u.Flags.Based = 1;
+
+    /* We create this for a section */
+    ControlArea->NumberOfSectionReferences = 1;
+    ControlArea->NumberOfUserReferences = 1;
+
+    ControlArea->FilePointer = File;
+    ObReferenceObject(File);
+
+    /* Our subsections are behind the control area */
+    SubSections = (PSUBSECTION)(ControlArea + 1);
+    /* Our PTEs are behind the subsections */
+    ThePtes = (PMMPTE)(SubSections + NtHeader->FileHeader.NumberOfSections + 1);
+    CurrentPte = ThePtes;
+
+    /* The first subsection is for the headers and is read-only. */
+    SubSections[0].ControlArea = ControlArea;
+    SubSections[0].PtesInSubsection = BYTES_TO_PAGES(ALIGN_UP_BY(SizeOfHeaders, SectionAlignment));
+    SubSections[0].SubsectionBase = CurrentPte;
+    SubSections[0].u.SubsectionFlags.Protection = MM_READONLY;
+    while (CurrentPte < (SubSections[0].SubsectionBase + SubSections[0].PtesInSubsection))
+        MI_MAKE_SUBSECTION_PTE(CurrentPte++, &SubSections[0]);
+    /* This points to the beggining of the file */
+    SubSections[0].StartingSector = 0;
+    SubSections[0].NumberOfFullSectors = SizeOfHeaders / FileAlignment;
+    /* FIXME: Not sure where to store this */
+    SubSections[0].u.SubsectionFlags.StartingSector4132 = FileAlignment >> 9;
+
+    /* Sanity check */
+    ASSERT((ULONG_PTR)CurrentPte < (ULONG_PTR)ControlArea + ControlAreaSize);
+
+    /* Move forward for the next subsections */
+    for (i = 0; i < NtHeader->FileHeader.NumberOfSections; i++)
+    {
+        PSUBSECTION SubSection = &SubSections[i + 1];
+        PIMAGE_SECTION_HEADER SectionHeader = &SectionHeaders[i];
+
+        /* Make sure we're not going beyond */
+        ASSERT((PMMPTE)(SubSection + 1) <= ThePtes);
+
+        /* Set the link */
+        SubSections[i].NextSubsection = SubSection;
+
+        SubSection->ControlArea = ControlArea;
+        SubSection->PtesInSubsection = BYTES_TO_PAGES(SectionHeader->Misc.VirtualSize);
+        SubSection->SubsectionBase = CurrentPte;
+
+        /* Set the protection accordingly to the section characteristics.
+         * The protection bits are the 4 most significant ones. How convenient. */
+        SubSection->u.SubsectionFlags.Protection = MmSectionCharacteristicsToProtectionMask[SectionHeader->Characteristics << 28];
+
+        /* Is this section uninitialized ? */
+        if (SectionHeader->Characteristics & IMAGE_SCN_CNT_UNINITIALIZED_DATA)
+        {
+            /* It is. Make that demand zero PTEs */
+            while (CurrentPte < (SubSection->SubsectionBase + SubSection->PtesInSubsection))
+            {
+                CurrentPte->u.Long = 0;
+                CurrentPte->u.Soft.Protection = SubSection->u.SubsectionFlags.Protection;
+                CurrentPte++;
+            }
+        }
+        else
+        {
+            while (CurrentPte < (SubSection->SubsectionBase + SubSection->PtesInSubsection))
+            {
+                MI_MAKE_SUBSECTION_PTE(CurrentPte, SubSection);
+                CurrentPte->u.Subsect.Protection = SubSection->u.SubsectionFlags.Protection;
+                CurrentPte++;
+            }
+
+            SubSection->StartingSector = SectionHeader->PointerToRawData / FileAlignment;
+            SubSection->NumberOfFullSectors = SectionHeader->SizeOfRawData / FileAlignment;
+        }
+
+        /* Set the other flags */
+        if (!(SectionHeader->Characteristics & IMAGE_SCN_MEM_WRITE))
+            SubSection->u.SubsectionFlags.ReadOnly = 1;
+        else if (SectionHeader->Characteristics & IMAGE_SCN_MEM_SHARED)
+            SubSection->u.SubsectionFlags.ReadWrite = 1;
+        /* TODO: handle other flags */
+
+        /* FIXME: Not sure where to store this. Min value: 0x200 */
+        SubSections[0].u.SubsectionFlags.StartingSector4132 = FileAlignment >> 9;
+    }
+
+    /* Make sure we got the allocation right */
+    ASSERT((ULONG_PTR)CurrentPte == (ULONG_PTR)ControlArea + ControlAreaSize);
+
+    /* Finally allocate the segment and the image information structure. */
+    *Segment = ExAllocatePoolZero(PagedPool, sizeof(*Segment) + sizeof(SECTION_IMAGE_INFORMATION), 'tSmM');
+    if (!*Segment)
+    {
+        Status = STATUS_NO_MEMORY;
+        goto Failure;
+    }
+    (*Segment)->ControlArea = ControlArea;
+    ControlArea->Segment = *Segment;
+    (*Segment)->PrototypePte = ThePtes;
+    (*Segment)->SizeOfSegment = SizeOfImage;
+
+    /* Check if we can perform relocations */
+    if (NtHeader->FileHeader.Characteristics & IMAGE_FILE_RELOCS_STRIPPED)
+    {
+        /* We can't. Remember that */
+        if (NtHeader->FileHeader.SizeOfOptionalHeader >= RTL_SIZEOF_THROUGH_FIELD(IMAGE_OPTIONAL_HEADER, ImageBase))
+            (*Segment)->BasedAddress = (PVOID)NtHeader->OptionalHeader.ImageBase;
+        else if (NtHeader->FileHeader.Characteristics & IMAGE_FILE_DLL)
+            (*Segment)->BasedAddress = (PVOID)0x10000000;
+        else
+            (*Segment)->BasedAddress = (PVOID)0x00400000;
+        ControlArea->u.Flags.Based = 1;
+    }
+    (*Segment)->TotalNumberOfPtes = BYTES_TO_PAGES(SizeOfImage);
+
+    /* Setup of the image information */
+    ImageInformation = (PSECTION_IMAGE_INFORMATION)((*Segment) + 1);
+    (*Segment)->u2.ImageInformation = ImageInformation;
+    if (NtHeader->FileHeader.SizeOfOptionalHeader >= RTL_SIZEOF_THROUGH_FIELD(IMAGE_OPTIONAL_HEADER, AddressOfEntryPoint))
+        ImageInformation->TransferAddress = (PVOID)NtHeader->OptionalHeader.AddressOfEntryPoint;
+    ImageInformation->ZeroBits = 0;
+    if (NtHeader->FileHeader.SizeOfOptionalHeader >= RTL_SIZEOF_THROUGH_FIELD(IMAGE_OPTIONAL_HEADER, SizeOfStackReserve))
+        ImageInformation->MaximumStackSize = NtHeader->OptionalHeader.SizeOfStackReserve;
+    if (NtHeader->FileHeader.SizeOfOptionalHeader >= RTL_SIZEOF_THROUGH_FIELD(IMAGE_OPTIONAL_HEADER, SizeOfStackCommit))
+        ImageInformation->CommittedStackSize = NtHeader->OptionalHeader.SizeOfStackCommit;
+    if (NtHeader->FileHeader.SizeOfOptionalHeader >= RTL_SIZEOF_THROUGH_FIELD(IMAGE_OPTIONAL_HEADER, Subsystem))
+        ImageInformation->SubSystemType = NtHeader->OptionalHeader.Subsystem;
+    if (NtHeader->FileHeader.SizeOfOptionalHeader >= RTL_SIZEOF_THROUGH_FIELD(IMAGE_OPTIONAL_HEADER, MajorSubsystemVersion))
+        ImageInformation->SubSystemMajorVersion = NtHeader->OptionalHeader.MajorSubsystemVersion;
+    if (NtHeader->FileHeader.SizeOfOptionalHeader >= RTL_SIZEOF_THROUGH_FIELD(IMAGE_OPTIONAL_HEADER, MinorSubsystemVersion))
+        ImageInformation->SubSystemMinorVersion = NtHeader->OptionalHeader.MinorSubsystemVersion;
+    ImageInformation->ImageCharacteristics = NtHeader->FileHeader.Characteristics;
+    if (NtHeader->FileHeader.SizeOfOptionalHeader >= RTL_SIZEOF_THROUGH_FIELD(IMAGE_OPTIONAL_HEADER, DllCharacteristics))
+        ImageInformation->DllCharacteristics = NtHeader->OptionalHeader.DllCharacteristics;
+    ImageInformation->Machine = NtHeader->FileHeader.Machine;
+    if (NtHeader->FileHeader.SizeOfOptionalHeader >= RTL_SIZEOF_THROUGH_FIELD(IMAGE_OPTIONAL_HEADER, SizeOfCode))
+        ImageInformation->ImageContainsCode = NtHeader->OptionalHeader.SizeOfCode != 0;
+    if (NtHeader->FileHeader.SizeOfOptionalHeader >= RTL_SIZEOF_THROUGH_FIELD(IMAGE_OPTIONAL_HEADER, LoaderFlags))
+        ImageInformation->LoaderFlags = NtHeader->OptionalHeader.LoaderFlags;
+    ImageInformation->ImageFileSize = ((PFSRTL_COMMON_FCB_HEADER)File->FsContext)->FileSize.QuadPart;
+
+    /* We're done, we can finally set the real pointer */
+    FsRtlAcquireToCreateMappedSection(File, SectionPageProtection);
+    File->SectionObjectPointer->ImageSectionObject = ControlArea;
+    FsRtlReleaseFile(File);
+
+    MiFreePagesForImageRead(ImageBase, HeaderSize);
+    return STATUS_SUCCESS;
+
+Failure:
+    if (*Segment)
+    {
+        ExFreePoolWithTag(*Segment, 'tSmM');
+        *Segment = NULL;
+    }
+
+    /* Remove this from the file */
+    FsRtlAcquireFileExclusive(File);
+    File->SectionObjectPointer->ImageSectionObject = NULL;
+    FsRtlReleaseFile(File);
+
+    if (ControlArea)
+    {
+        ObDereferenceObject(File);
+        ExFreePoolWithTag(ControlArea, 'tCmM');
+    }
+
+
+    /* Free the memory we had to reserve */
+    MiFreePagesForImageRead(ImageBase, HeaderSize);
+
+    return Status;
+}
+
 NTSTATUS
 NTAPI
 MiCreatePagingFileMap(OUT PSEGMENT *Segment,
@@ -2470,17 +3301,14 @@ MmCreateArm3Section(OUT PVOID *SectionObject,
 {
     SECTION Section;
     PSECTION NewSection;
-    PSUBSECTION Subsection;
-    PSEGMENT NewSegment, Segment;
+    PSEGMENT NewSegment = NULL, Segment;
     NTSTATUS Status;
     PCONTROL_AREA ControlArea;
-    ULONG ProtectionMask, ControlAreaSize, Size, NonPagedCharge, PagedCharge;
+    ULONG ProtectionMask, Size, NonPagedCharge, PagedCharge;
     KPROCESSOR_MODE PreviousMode = ExGetPreviousMode();
     BOOLEAN FileLock = FALSE, KernelCall = FALSE;
     KIRQL OldIrql;
-    PFILE_OBJECT File;
     BOOLEAN UserRefIncremented = FALSE;
-    PVOID PreviousSectionPointer;
 
     /* Make the same sanity checks that the Nt interface should've validated */
     ASSERT((AllocationAttributes & ~(SEC_COMMIT | SEC_RESERVE | SEC_BASED |
@@ -2504,7 +3332,7 @@ MmCreateArm3Section(OUT PVOID *SectionObject,
     if (ProtectionMask == MM_INVALID_PROTECTION) return STATUS_INVALID_PAGE_PROTECTION;
 
     /* Check if this is going to be a data or image backed file section */
-    if ((FileHandle) || (FileObject))
+    if (FileHandle || FileObject)
     {
         /* These cannot be mapped with large pages */
         if (AllocationAttributes & SEC_LARGE_PAGES) return STATUS_INVALID_PARAMETER_6;
@@ -2517,138 +3345,113 @@ MmCreateArm3Section(OUT PVOID *SectionObject,
                                            MmMakeFileAccess[ProtectionMask],
                                            IoFileObjectType,
                                            PreviousMode,
-                                           (PVOID*)&File,
+                                           (PVOID*)&FileObject,
                                            NULL);
         if (!NT_SUCCESS(Status)) return Status;
 
         /* Make sure Cc has been doing its job */
-        if (!File->SectionObjectPointer)
+        if (!FileObject->SectionObjectPointer)
         {
             /* This is not a valid file system-based file, fail */
-            ObDereferenceObject(File);
+            ObDereferenceObject(FileObject);
             return STATUS_INVALID_FILE_FOR_SECTION;
         }
 
-        /* Image-file backed sections are not yet supported */
-        ASSERT((AllocationAttributes & SEC_IMAGE) == 0);
-
-        /* Compute the size of the control area, and allocate it */
-        ControlAreaSize = sizeof(CONTROL_AREA) + sizeof(MSUBSECTION);
-        ControlArea = ExAllocatePoolWithTag(NonPagedPool, ControlAreaSize, 'aCmM');
-        if (!ControlArea)
+        if (AllocationAttributes & SEC_IMAGE)
         {
-            ObDereferenceObject(File);
-            return STATUS_INSUFFICIENT_RESOURCES;
-        }
-
-        /* Zero it out */
-        RtlZeroMemory(ControlArea, ControlAreaSize);
-
-        /* Did we get a handle, or an object? */
-        if (FileHandle)
-        {
-            /* We got a file handle so we have to lock down the file */
-#if 0
-            Status = FsRtlAcquireToCreateMappedSection(File, SectionPageProtection);
-            if (!NT_SUCCESS(Status))
+            while (TRUE)
             {
-                ExFreePool(ControlArea);
-                ObDereferenceObject(File);
-                return Status;
-            }
-#else
-            /* ReactOS doesn't support this API yet, so do nothing */
-            Status = STATUS_SUCCESS;
-#endif
-            /* Update the top-level IRP so that drivers know what's happening */
-            IoSetTopLevelIrp((PIRP)FSRTL_FSP_TOP_LEVEL_IRP);
-            FileLock = TRUE;
-        }
+                /* Update the top-level IRP so that drivers know what's happening */
+                if (FileHandle != NULL)
+                {
+                    IoSetTopLevelIrp((PIRP)FSRTL_FSP_TOP_LEVEL_IRP);
+                    Status = FsRtlAcquireToCreateMappedSection(FileObject, SectionPageProtection);
+                    if (!NT_SUCCESS(Status))
+                    {
+                        ObDereferenceObject(FileObject);
+                        return Status;
+                    }
+                    FileLock = TRUE;
+                }
 
-        /* Lock the PFN database while we play with the section pointers */
-        OldIrql = MiAcquirePfnLock();
+                ControlArea = FileObject->SectionObjectPointer->ImageSectionObject;
+                if (ControlArea != NULL)
+                {
+                    if ((ControlArea->u.Flags.BeingCreated) || (ControlArea->u.Flags.BeingDeleted))
+                    {
+                        LARGE_INTEGER ShortTime;
+                        /* Yield and retry */
+                        if (FileLock)
+                        {
+                            FsRtlReleaseFile(FileObject);
+                            IoSetTopLevelIrp(NULL);
+                            FileLock = FALSE;
+                        }
+                        ShortTime.QuadPart = -10 * 100 * 1000;
+                        KeDelayExecutionThread(KernelMode, FALSE, &ShortTime);
+                        continue;
+                    }
 
-        /* Image-file backed sections are not yet supported */
-        ASSERT((AllocationAttributes & SEC_IMAGE) == 0);
+                    /* Image mapping is already there for this file. */
+                    Segment = ControlArea->Segment;
+                    ControlArea->NumberOfUserReferences++;
+                    ControlArea->NumberOfSectionReferences++;
+                    UserRefIncremented = TRUE;
+                    if (FileLock)
+                    {
+                        FsRtlReleaseFile(FileObject);
+                        IoSetTopLevelIrp(NULL);
+                        FileLock = FALSE;
+                    }
+                    break;
+                }
+                else
+                {
+                    CONTROL_AREA TempControlArea;
 
-        /* There should not already be a control area for this file */
-        ASSERT(File->SectionObjectPointer->DataSectionObject == NULL);
-        NewSegment = NULL;
+                    /* Set a fake control area while we are creating a new one *//* Setup a fake ControlArea while we are creating the real one */
+                    RtlZeroMemory(&TempControlArea, sizeof(TempControlArea));
+                    /* A bit of setup */
+                    TempControlArea.u.Flags.BeingCreated = 1;
+                    TempControlArea.u.Flags.File = 1;
+                    TempControlArea.u.Flags.Image = 1;
+                    TempControlArea.FilePointer = FileObject;
+                    FileObject->SectionObjectPointer->ImageSectionObject = &TempControlArea;
 
-        /* Write down that this CA is being created, and set it */
-        ControlArea->u.Flags.BeingCreated = TRUE;
-        ASSERT((AllocationAttributes & SEC_IMAGE) == 0);
-        PreviousSectionPointer = File->SectionObjectPointer;
-        File->SectionObjectPointer->DataSectionObject = ControlArea;
+                    /* We can let the lock go for now. */
+                    FsRtlReleaseFile(FileObject);
+                    IoSetTopLevelIrp(NULL);
 
-        /* We can release the PFN lock now */
-        MiReleasePfnLock(OldIrql);
+                    Status = MiCreateImageFileMap(FileObject, SectionPageProtection, AllocationAttributes, &NewSegment);
+                    if (!NT_SUCCESS(Status))
+                    {
+                        ControlArea = InterlockedExchangePointer(&FileObject->SectionObjectPointer->ImageSectionObject, NULL);
+                        ASSERT(ControlArea = &TempControlArea);
+                        ObDereferenceObject(FileObject);
+                        return Status;
+                    }
+                    ControlArea = InterlockedExchangePointer(
+                        &FileObject->SectionObjectPointer->ImageSectionObject,
+                        NewSegment->ControlArea);
+                    ASSERT(ControlArea = &TempControlArea);
 
-        /* We don't support previously-mapped file */
-        ASSERT(NewSegment == NULL);
+                    ControlArea = NewSegment->ControlArea;
+                    Segment = NewSegment;
 
-        /* Image-file backed sections are not yet supported */
-        ASSERT((AllocationAttributes & SEC_IMAGE) == 0);
-
-        /* So we always create a data file map */
-        Status = MiCreateDataFileMap(File,
-                                     &Segment,
-                                     (PSIZE_T)InputMaximumSize,
-                                     SectionPageProtection,
-                                     AllocationAttributes,
-                                     KernelCall);
-        if (!NT_SUCCESS(Status))
-        {
-            /* Lock the PFN database while we play with the section pointers */
-            OldIrql = MiAcquirePfnLock();
-
-            /* Reset the waiting-for-deletion event */
-            ASSERT(ControlArea->WaitingForDeletion == NULL);
-            ControlArea->WaitingForDeletion = NULL;
-
-            /* Set the file pointer NULL flag */
-            ASSERT(ControlArea->u.Flags.FilePointerNull == 0);
-            ControlArea->u.Flags.FilePointerNull = TRUE;
-
-            /* Delete the data section object */
-            ASSERT((AllocationAttributes & SEC_IMAGE) == 0);
-            File->SectionObjectPointer->DataSectionObject = NULL;
-
-            /* No longer being created */
-            ControlArea->u.Flags.BeingCreated = FALSE;
-
-            /* We can release the PFN lock now */
-            MiReleasePfnLock(OldIrql);
-
-            /* Check if we locked and set the IRP */
-            if (FileLock)
-            {
-                /* Undo */
-                IoSetTopLevelIrp(NULL);
-                //FsRtlReleaseFile(File);
+                    /* MiCreateImageFileMap increments user references */
+                    UserRefIncremented = TRUE;
+                    ASSERT(ControlArea->u.Flags.BeingCreated == 1);
+                    break;
+                }
             }
 
-            /* Free the control area and de-ref the file object */
-            ExFreePool(ControlArea);
-            ObDereferenceObject(File);
-
-            /* All done */
-            return Status;
-        }
-
-        /* On success, we expect this */
-        ASSERT(PreviousSectionPointer == File->SectionObjectPointer);
-
-        /* Check if a maximum size was specified */
-        if (!InputMaximumSize->QuadPart)
-        {
-            /* Nope, use the segment size */
-            Section.SizeOfSection.QuadPart = (LONGLONG)Segment->SizeOfSegment;
+            /* Size of section for an image mapping is always the size of the segment */
+            Section.SizeOfSection.QuadPart = Segment->SizeOfSegment;
         }
         else
         {
-            /* Yep, use the entered size */
-            Section.SizeOfSection.QuadPart = InputMaximumSize->QuadPart;
+            /* Not supported in ARM3 yet */
+            ASSERT(FALSE);
         }
     }
     else
@@ -2666,35 +3469,13 @@ MmCreateArm3Section(OUT PVOID *SectionObject,
                                        AllocationAttributes);
         if (!NT_SUCCESS(Status)) return Status;
 
-        /* Set the size here, and read the control area */
+        /* Read the control area */
         Section.SizeOfSection.QuadPart = NewSegment->SizeOfSegment;
         ControlArea = NewSegment->ControlArea;
 
         /* MiCreatePagingFileMap increments user references */
         UserRefIncremented = TRUE;
-    }
-
-    /* Did we already have a segment? */
-    if (!NewSegment)
-    {
-        /* This must be the file path and we created a segment */
-        NewSegment = Segment;
-        ASSERT(File != NULL);
-
-        /* Acquire the PFN lock while we set control area flags */
-        OldIrql = MiAcquirePfnLock();
-
-        /* We don't support this race condition yet, so assume no waiters */
-        ASSERT(ControlArea->WaitingForDeletion == NULL);
-        ControlArea->WaitingForDeletion = NULL;
-
-        /* Image-file backed sections are not yet supported, nor ROM images */
-        ASSERT((AllocationAttributes & SEC_IMAGE) == 0);
-        ASSERT(Segment->ControlArea->u.Flags.Rom == 0);
-
-        /* Take off the being created flag, and then release the lock */
-        ControlArea->u.Flags.BeingCreated = FALSE;
-        MiReleasePfnLock(OldIrql);
+        Segment = NewSegment;
     }
 
     /* Check if we locked the file earlier */
@@ -2710,7 +3491,7 @@ MmCreateArm3Section(OUT PVOID *SectionObject,
     Section.InitialPageProtection = SectionPageProtection;
 
     /* The mapping created a control area and segment, save the flags */
-    Section.Segment = NewSegment;
+    Section.Segment = Segment;
     Section.u.LongFlags = ControlArea->u.LongFlags;
 
     /* Check if this is a user-mode read-write non-image file mapping */
@@ -2724,31 +3505,45 @@ MmCreateArm3Section(OUT PVOID *SectionObject,
         InterlockedIncrement((volatile LONG*)&ControlArea->WritableUserReferences);
     }
 
-    /* Check for image mappings or page file mappings */
-    if ((ControlArea->u.Flags.Image) || !(ControlArea->FilePointer))
+    /* Charge a CA, and the subsections right after */
+    PagedCharge = sizeof(SECTION);
+    NonPagedCharge = 0;
+    if (NewSegment)
     {
-        /* Charge the segment size, and allocate a subsection */
-        PagedCharge = sizeof(SECTION) + NewSegment->TotalNumberOfPtes * sizeof(MMPTE);
-        Size = sizeof(SUBSECTION);
-    }
-    else
-    {
-        /* Charge nothing, and allocate a mapped subsection */
-        PagedCharge = 0;
-        Size = sizeof(MSUBSECTION);
+        /* If we allocated a new segment, we must charge for the structures we just allocated */
+        NonPagedCharge = sizeof(CONTROL_AREA);
+        if (ControlArea->u.Flags.Image || !ControlArea->u.Flags.File)
+        {
+            /* Charge for the subsections */
+            PSUBSECTION SubSection = (PSUBSECTION)(ControlArea + 1);
+            while (SubSection != NULL)
+            {
+                NonPagedCharge += sizeof(*SubSection);
+                SubSection = SubSection->NextSubsection;
+            }
+
+            /* Charge for the segment */
+            PagedCharge += sizeof(SEGMENT);
+
+            /* Charge for the PTEs. For image mapping, they are behind the CA, for pagefile mappings, they are with the segment */
+            if (ControlArea->u.Flags.Image)
+                NonPagedCharge += sizeof(MMPTE) * Segment->TotalNumberOfPtes;
+            else
+                PagedCharge += sizeof(MMPTE) * Segment->TotalNumberOfPtes;
+        }
+        else
+        {
+            /* File mapping, not yety supported. */
+            ASSERT(FALSE);
+        }
     }
 
     /* Check if this is a normal CA */
     ASSERT(ControlArea->u.Flags.GlobalOnlyPerSession == 0);
     ASSERT(ControlArea->u.Flags.Rom == 0);
 
-    /* Charge only a CA, and the subsection is right after */
-    NonPagedCharge = sizeof(CONTROL_AREA);
-    Subsection = (PSUBSECTION)(ControlArea + 1);
-
     /* We only support single-subsection mappings */
     NonPagedCharge += Size;
-    ASSERT(Subsection->NextSubsection == NULL);
 
     /* Create the actual section object, with enough space for the prototype PTEs */
     Status = ObCreateObject(PreviousMode,
@@ -2907,7 +3702,7 @@ MmMapViewOfArm3Section(IN PVOID SectionObject,
     ControlArea = Section->Segment->ControlArea;
 
     /* These flags/states are not yet supported by ARM3 */
-    ASSERT(Section->u.Flags.Image == 0);
+    ASSERT(Section->u.Flags.File == 0 || Section->u.Flags.Image ==1);
     ASSERT(Section->u.Flags.NoCache == 0);
     ASSERT(Section->u.Flags.WriteCombined == 0);
     ASSERT(ControlArea->u.Flags.PhysicalMemory == 0);
@@ -2995,17 +3790,34 @@ MmMapViewOfArm3Section(IN PVOID SectionObject,
     }
 
     /* Do the actual mapping */
-    Status = MiMapViewOfDataSection(ControlArea,
-                                    Process,
-                                    BaseAddress,
-                                    SectionOffset,
-                                    ViewSize,
-                                    Section,
-                                    InheritDisposition,
-                                    ProtectionMask,
-                                    CommitSize,
-                                    ZeroBits,
-                                    AllocationType);
+    if (Section->u.Flags.Image)
+    {
+        Status = MiMapViewOfImageSection(ControlArea,
+                                         Process,
+                                         BaseAddress,
+                                         SectionObject,
+                                         ViewSize,
+                                         Section,
+                                         InheritDisposition,
+                                         ProtectionMask,
+                                         CommitSize,
+                                         ZeroBits,
+                                         AllocationType);
+    }
+    else
+    {
+        Status = MiMapViewOfDataSection(ControlArea,
+                                        Process,
+                                        BaseAddress,
+                                        SectionOffset,
+                                        ViewSize,
+                                        Section,
+                                        InheritDisposition,
+                                        ProtectionMask,
+                                        CommitSize,
+                                        ZeroBits,
+                                        AllocationType);
+    }
 
     /* Detach if needed, then return status */
     if (Attached) KeUnstackDetachProcess(&ApcState);

@@ -4353,18 +4353,18 @@ MmCreateSection (OUT PVOID  * Section,
     BOOLEAN FileLock = FALSE;
 
     /* Check if an ARM3 section is being created instead */
-    if (!(AllocationAttributes & (SEC_IMAGE | SEC_PHYSICALMEMORY)))
+    if ((!(FileObject) && !(FileHandle)) || (AllocationAttributes & SEC_IMAGE))
     {
-        if (!(FileObject) && !(FileHandle))
+        if (!(AllocationAttributes & SEC_PHYSICALMEMORY))
         {
             return MmCreateArm3Section(Section,
-                                       DesiredAccess,
-                                       ObjectAttributes,
-                                       MaximumSize,
-                                       SectionPageProtection,
-                                       AllocationAttributes &~ 1,
-                                       FileHandle,
-                                       FileObject);
+                                        DesiredAccess,
+                                        ObjectAttributes,
+                                        MaximumSize,
+                                        SectionPageProtection,
+                                        AllocationAttributes &~ 1,
+                                        FileHandle,
+                                        FileObject);
         }
     }
 

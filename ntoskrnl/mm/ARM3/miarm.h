@@ -863,8 +863,8 @@ MI_MAKE_PROTOTYPE_PTE(IN PMMPTE NewPte,
 //
 FORCEINLINE
 VOID
-MI_MAKE_SUBSECTION_PTE(IN PMMPTE NewPte,
-                       IN PVOID Segment)
+MI_MAKE_SUBSECTION_PTE(_Out_ PMMPTE NewPte,
+                       _In_ PVOID SubSection)
 {
     ULONG_PTR Offset;
 
@@ -878,14 +878,14 @@ MI_MAKE_SUBSECTION_PTE(IN PMMPTE NewPte,
      * maximum of 128MB to each delta, meaning nonpaged pool cannot exceed
      * 256MB.
      */
-    if ((ULONG_PTR)Segment < ((ULONG_PTR)MmSubsectionBase + (128 * _1MB)))
+    if ((ULONG_PTR)SubSection < ((ULONG_PTR)MmSubsectionBase + (128 * _1MB)))
     {
-        Offset = (ULONG_PTR)Segment - (ULONG_PTR)MmSubsectionBase;
+        Offset = (ULONG_PTR)SubSection - (ULONG_PTR)MmSubsectionBase;
         NewPte->u.Subsect.WhichPool = PagedPool;
     }
     else
     {
-        Offset = (ULONG_PTR)MmNonPagedPoolEnd - (ULONG_PTR)Segment;
+        Offset = (ULONG_PTR)MmNonPagedPoolEnd - (ULONG_PTR)SubSection;
         NewPte->u.Subsect.WhichPool = NonPagedPool;
     }
 
