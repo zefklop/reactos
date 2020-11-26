@@ -3695,6 +3695,8 @@ MmMapViewOfArm3Section(IN PVOID SectionObject,
     ULONG ProtectionMask;
     NTSTATUS Status;
     ULONG64 CalculatedViewSize;
+    LARGE_INTEGER LocalSectionOffset;
+
     PAGED_CODE();
 
     /* Get the segment and control area */
@@ -3721,17 +3723,20 @@ MmMapViewOfArm3Section(IN PVOID SectionObject,
         return STATUS_SECTION_PROTECTION;
     }
 
+    if (SectionOffset != NULL)
+        LocalSectionOffset = *SectionOffset;
+    else
+        LocalSectionOffset.QuadPart = 0;
+
     /* Check if the offset and size would cause an overflow */
-    if (((ULONG64)SectionOffset->QuadPart + *ViewSize) <
-         (ULONG64)SectionOffset->QuadPart)
+    if (((ULONG64)LocalSectionOffset.QuadPart + *ViewSize) < (ULONG64)LocalSectionOffset.QuadPart)
     {
         DPRINT1("Section offset overflows\n");
         return STATUS_INVALID_VIEW_SIZE;
     }
 
     /* Check if the offset and size are bigger than the section itself */
-    if (((ULONG64)SectionOffset->QuadPart + *ViewSize) >
-         (ULONG64)Section->SizeOfSection.QuadPart)
+    if (((ULONG64)LocalSectionOffset.QuadPart + *ViewSize) > (ULONG64)Section->SizeOfSection.QuadPart)
     {
         DPRINT1("Section offset is larger than section\n");
         return STATUS_INVALID_VIEW_SIZE;
@@ -3741,8 +3746,7 @@ MmMapViewOfArm3Section(IN PVOID SectionObject,
     if (!(*ViewSize))
     {
         /* Compute it for the caller */
-        CalculatedViewSize = Section->SizeOfSection.QuadPart -
-                             SectionOffset->QuadPart;
+        CalculatedViewSize = Section->SizeOfSection.QuadPart - LocalSectionOffset.QuadPart;
 
         /* Check if it's larger than 4GB or overflows into kernel-mode */
         if (!NT_SUCCESS(RtlULongLongToSIZET(CalculatedViewSize, ViewSize)) ||
@@ -3809,7 +3813,7 @@ MmMapViewOfArm3Section(IN PVOID SectionObject,
         Status = MiMapViewOfDataSection(ControlArea,
                                         Process,
                                         BaseAddress,
-                                        SectionOffset,
+                                        &LocalSectionOffset,
                                         ViewSize,
                                         Section,
                                         InheritDisposition,
@@ -3821,6 +3825,11 @@ MmMapViewOfArm3Section(IN PVOID SectionObject,
 
     /* Detach if needed, then return status */
     if (Attached) KeUnstackDetachProcess(&ApcState);
+
+    /* Give back the section offset if needed */
+    if (NT_SUCCESS(Status) && SectionOffset)
+        *SectionOffset = LocalSectionOffset;
+
     return Status;
 }
 
