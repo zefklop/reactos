@@ -261,7 +261,7 @@ PspMapSystemDll(IN PEPROCESS Process,
                                 &ViewSize,
                                 ViewShare,
                                 0,
-                                PAGE_READWRITE);
+                                PAGE_EXECUTE_READ);
     if (Status != STATUS_SUCCESS)
     {
         /* Normalize status code */
@@ -323,7 +323,7 @@ PsLocateSystemDll(VOID)
                              SECTION_ALL_ACCESS,
                              NULL,
                              NULL,
-                             PAGE_EXECUTE,
+                             PAGE_EXECUTE_READ,
                              SEC_IMAGE,
                              FileHandle);
     ZwClose(FileHandle);
