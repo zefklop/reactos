@@ -158,7 +158,10 @@ MiLoadImageSection(_Inout_ PSECTION *SectionPtr,
     }
 
     /* Reserve system PTEs needed */
-    PteCount = ROUND_TO_PAGES(((PMM_IMAGE_SECTION_OBJECT)Section->Segment)->ImageInformation.ImageFileSize) >> PAGE_SHIFT;
+    if (MiIsRosSectionObject(Section))
+        PteCount = ROUND_TO_PAGES(((PMM_IMAGE_SECTION_OBJECT)Section->Segment)->ImageInformation.ImageFileSize) >> PAGE_SHIFT;
+    else
+        PteCount = Section->Segment->TotalNumberOfPtes;
     PointerPte = MiReserveSystemPtes(PteCount, SystemPteSpace);
     if (!PointerPte)
     {
@@ -3085,7 +3088,10 @@ LoaderScan:
     ASSERT(Status != STATUS_ALREADY_COMMITTED);
 
     /* Get the size of the driver */
-    DriverSize = ((PMM_IMAGE_SECTION_OBJECT)Section->Segment)->ImageInformation.ImageFileSize;
+    if (MiIsRosSectionObject(Section))
+        DriverSize = ((PMM_IMAGE_SECTION_OBJECT)Section->Segment)->ImageInformation.ImageFileSize;
+    else
+        DriverSize = Section->Segment->SizeOfSegment;
 
     /* Make sure we're not being loaded into session space */
     if (!Flags)
