@@ -3087,6 +3087,13 @@ LoaderScan:
                                 NULL);
     ASSERT(Status != STATUS_ALREADY_COMMITTED);
 
+    /* Check for failure of the load earlier */
+    if (!NT_SUCCESS(Status))
+    {
+        DPRINT1("MiLoadImageSection failed with status 0x%x\n", Status);
+        goto Quickie;
+    }
+
     /* Get the size of the driver */
     if (MiIsRosSectionObject(Section))
         DriverSize = ((PMM_IMAGE_SECTION_OBJECT)Section->Segment)->ImageInformation.ImageFileSize;
@@ -3096,26 +3103,15 @@ LoaderScan:
     /* Make sure we're not being loaded into session space */
     if (!Flags)
     {
-        /* Check for success */
-        if (NT_SUCCESS(Status))
-        {
-            /* Support large pages for drivers */
-            MiUseLargeDriverPage(DriverSize / PAGE_SIZE,
-                                 &ModuleLoadBase,
-                                 &BaseName,
-                                 TRUE);
-        }
+        /* Support large pages for drivers */
+        MiUseLargeDriverPage(DriverSize / PAGE_SIZE,
+                            &ModuleLoadBase,
+                            &BaseName,
+                            TRUE);
 
         /* Dereference the section */
         ObDereferenceObject(Section);
         Section = NULL;
-    }
-
-    /* Check for failure of the load earlier */
-    if (!NT_SUCCESS(Status))
-    {
-        DPRINT1("MiLoadImageSection failed with status 0x%x\n", Status);
-        goto Quickie;
     }
 
     /* Relocate the driver */
