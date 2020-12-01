@@ -3754,9 +3754,6 @@ NtWriteFile(IN HANDLE FileHandle,
     BOOLEAN Synchronous = FALSE;
     PMDL Mdl;
     OBJECT_HANDLE_INFORMATION ObjectHandleInfo;
-    PFAST_IO_DISPATCH FastIoDispatch;
-    IO_STATUS_BLOCK KernelIosb;
-    BOOLEAN Success;
 
     PAGED_CODE();
     CapturedByteOffset.QuadPart = 0;
@@ -3916,6 +3913,10 @@ NtWriteFile(IN HANDLE FileHandle,
         /* If the file is cached, try fast I/O */
         if (FileObject->PrivateCacheMap)
         {
+            PFAST_IO_DISPATCH FastIoDispatch;
+            IO_STATUS_BLOCK KernelIosb;
+            BOOLEAN Success;
+
             /* Perform fast write */
             FastIoDispatch = DeviceObject->DriverObject->FastIoDispatch;
             ASSERT(FastIoDispatch != NULL && FastIoDispatch->FastIoWrite != NULL);
