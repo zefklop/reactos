@@ -2472,10 +2472,10 @@ UserFault:
                 Pfn1 = MI_PFN_ELEMENT(OldPageFrameIndex);
                 ASSERT(Pfn1->u3.e1.PrototypePte == 1);
                 ASSERT(!MI_IS_PFN_DELETED(Pfn1));
-                ProtoPte = Pfn1->PteAddress;
-                MiDeletePte(PointerPte, Address, CurrentProcess, ProtoPte);
+                MiDecrementShareCount(Pfn1, OldPageFrameIndex);
 
                 /* And make a new shiny one with our page */
+                MI_WRITE_INVALID_PTE(PointerPte, DemandZeroPte);
                 MiInitializePfn(PageFrameIndex, PointerPte, TRUE);
                 TempPte.u.Hard.PageFrameNumber = PageFrameIndex;
                 TempPte.u.Hard.Write = 1;
