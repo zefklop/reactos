@@ -1363,7 +1363,7 @@ MmCleanProcessAddressSpace(IN PEPROCESS Process)
         MiRemoveNode((PMMADDRESS_NODE)Vad, VadTree);
 
         /* Only regular VADs supported for now */
-        ASSERT(Vad->u.VadFlags.VadType == VadNone);
+        ASSERT((Vad->u.VadFlags.VadType == VadNone) || (Vad->u.VadFlags.VadType == VadImageMap));
 
         /* Check if this is a section VAD */
         if (!(Vad->u.VadFlags.PrivateMemory) && (Vad->ControlArea))
