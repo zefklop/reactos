@@ -202,13 +202,26 @@ C_ASSERT(PD_COUNT == 1);
              (((x)->u.Proto.ProtoAddressHigh << 9) | (x)->u.Proto.ProtoAddressLow << 2))
 
 //
-// Decodes a Prototype PTE into the underlying PTE
+// Decodes a Prototype PTE into the underlying Subsection
 //
-#define MiSubsectionPteToSubsection(x)                              \
-    ((x)->u.Subsect.WhichPool == PagedPool) ?                       \
-        (PMMPTE)((ULONG_PTR)MmSubsectionBase +                      \
-                 (((x)->u.Subsect.SubsectionAddressHigh << 7) |     \
-                   (x)->u.Subsect.SubsectionAddressLow << 3)) :     \
-        (PMMPTE)((ULONG_PTR)MmNonPagedPoolEnd -                     \
-                (((x)->u.Subsect.SubsectionAddressHigh << 7) |      \
-                  (x)->u.Subsect.SubsectionAddressLow << 3))
+extern PVOID MmPagedPoolStart;
+extern PVOID MmPagedPoolEnd;
+extern ULONG_PTR MmSubsectionBase;
+extern PVOID MmNonPagedPoolEnd;
+
+FORCEINLINE
+PSUBSECTION
+MiSubsectionPteToSubsection(PMMPTE PointerPte)
+{
+    ULONG_PTR Delta;
+
+    ASSERT(PointerPte->u.Hard.Valid == 0);
+    ASSERT(PointerPte->u.Soft.Prototype == 1);
+    ASSERT(((ULONG_PTR)PointerPte >= (ULONG_PTR)MmPagedPoolStart) &&
+        ((ULONG_PTR)PointerPte <= (ULONG_PTR)MmPagedPoolEnd));
+
+    Delta = (PointerPte->u.Subsect.SubsectionAddressHigh << 7) | (PointerPte->u.Subsect.SubsectionAddressLow << 3);
+
+    return PointerPte->u.Subsect.WhichPool == PagedPool ? (PSUBSECTION)(MmSubsectionBase + Delta) :
+        (PSUBSECTION)((ULONG_PTR)MmNonPagedPoolEnd - Delta);
+}
