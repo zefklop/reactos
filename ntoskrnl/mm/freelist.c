@@ -610,6 +610,9 @@ MmAllocPage(ULONG Type)
 
     OldIrql = MiAcquirePfnLock();
 
+    MI_SET_USAGE(MI_USAGE_DEMAND_ZERO);
+    MI_SET_PROCESS2("Legacy Mm");
+
     PfnOffset = MiRemoveZeroPage(MI_GET_NEXT_COLOR());
     if (!PfnOffset)
     {

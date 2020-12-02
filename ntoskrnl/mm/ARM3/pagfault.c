@@ -2210,6 +2210,9 @@ UserFault:
 
                 ASSERT(MmAvailablePages > 0);
 
+                MI_SET_USAGE(MI_USAGE_DEMAND_ZERO);
+                MI_SET_PROCESS2(CurrentProcess->ImageFileName);
+
                 /* Allocate a new page and copy it */
                 PageFrameIndex = MiRemoveAnyPage(MI_GET_NEXT_PROCESS_COLOR(CurrentProcess));
                 OldPageFrameIndex = PFN_FROM_PTE(&TempPte);

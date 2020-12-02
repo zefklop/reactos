@@ -801,7 +801,7 @@ MiBuildPfnDatabaseFromPages(IN PLOADER_PARAMETER_BLOCK LoaderBlock)
                 Pfn1->u3.e1.CacheAttribute = MiNonCached;
 #if MI_TRACE_PFNS
                 Pfn1->PfnUsage = MI_USAGE_INIT_MEMORY;
-                memcpy(Pfn1->ProcessName, "Initial PDE", 16);
+                strncpy(Pfn1->ProcessName, "Initial PDE", 16);
 #endif
             }
             else
@@ -848,7 +848,7 @@ MiBuildPfnDatabaseFromPages(IN PLOADER_PARAMETER_BLOCK LoaderBlock)
                                 Pfn2->u3.e1.CacheAttribute = MiNonCached;
 #if MI_TRACE_PFNS
                                 Pfn2->PfnUsage = MI_USAGE_INIT_MEMORY;
-                                memcpy(Pfn1->ProcessName, "Initial PTE", 16);
+                                strncpy(Pfn1->ProcessName, "Initial PTE", 16);
 #endif
                             }
                         }
