@@ -1102,7 +1102,7 @@ MmInitializeProcessAddressSpace(IN PEPROCESS Process,
                                     &ViewSize,
                                     0,
                                     MEM_COMMIT,
-                                    PAGE_READWRITE);
+                                    PAGE_EXECUTE);
 
         /* Save the pointer */
         Process->SectionBaseAddress = ImageBase;
