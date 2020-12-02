@@ -291,7 +291,6 @@ MiCheckVirtualAddress(IN PVOID VirtualAddress,
         else
         {
             /* ReactOS does not supoprt these VADs yet */
-            ASSERT(Vad->u.VadFlags.VadType != VadImageMap);
             ASSERT(Vad->u2.VadFlags2.ExtendableFile == 0);
 
             /* Return the proto VAD */
@@ -303,7 +302,26 @@ MiCheckVirtualAddress(IN PVOID VirtualAddress,
             ASSERT(PointerPte <= Vad->LastContiguousPte);
 
             /* Return the Prototype PTE and the protection for the page mapping */
-            *ProtectCode = (ULONG)Vad->u.VadFlags.Protection;
+            if (Vad->u.VadFlags.VadType == VadImageMap)
+            {
+                /* We must get the protection from the PTE */
+                if (PointerPte->u.Hard.Valid)
+                {
+                    /* Get the protection from the original PTE */
+                    MMPTE OrigPte = MiGetPfnEntry(PointerPte->u.Hard.PageFrameNumber)->OriginalPte;
+                    *ProtectCode = OrigPte.u.Soft.Protection;
+                }
+                else
+                {
+                    *ProtectCode = PointerPte->u.Soft.Protection;
+                }
+                DPRINT1("Returning ProtectCode 0x%X for image file map.\n", *ProtectCode);
+                ASSERT(*ProtectCode != 0);
+            }
+            else
+            {
+                *ProtectCode = (ULONG)Vad->u.VadFlags.Protection;
+            }
             return PointerPte;
         }
     }
@@ -603,6 +621,7 @@ MiResolveDemandZeroFault(IN PVOID Address,
     BOOLEAN NeedZero = FALSE, HaveLock = FALSE;
     ULONG Color;
     PMMPFN Pfn1;
+
     DPRINT("ARM3 Demand Zero Page Fault Handler for address: %p in process: %p\n",
             Address,
             Process);
@@ -874,6 +893,7 @@ MiCompleteProtoPteFault(IN BOOLEAN StoreInstruction,
 
     /* Return success */
     ASSERT(PointerPte == MiAddressToPte(Address));
+    DPRINT("ProtoPte page fault for 0x%p: Success!\n", Address);
     return STATUS_SUCCESS;
 }
 
@@ -965,6 +985,207 @@ MiResolvePageFileFault(_In_ BOOLEAN StoreInstruction,
 static
 NTSTATUS
 NTAPI
+MiResolveMappedFileFault(_Inout_ PMMPTE PointerPte,
+                         _Inout_ KIRQL* Irql)
+{
+    PSUBSECTION Subsection;
+    PMMPTE FirstPte, LastPte, CurrentPte;
+    PMDL Mdl;
+    PPFN_NUMBER PfnArray;
+    LARGE_INTEGER FileOffset;
+    NTSTATUS Status;
+    KEVENT ReadEvent;
+    IO_STATUS_BLOCK Iosb;
+    ULONG FileAlignment;
+
+    DPRINT("Paging-in file!\n");
+
+    ASSERT(PointerPte->u.Soft.Prototype);
+    /* Get the subsection from the PTE */
+    Subsection = MiSubsectionPteToSubsection(PointerPte);
+    ASSERT(Subsection != NULL);
+    ASSERT((PointerPte >= Subsection->SubsectionBase) && (PointerPte < Subsection->SubsectionBase + Subsection->PtesInSubsection));
+
+    /* Calculate the file alignment. */
+    if (Subsection->ControlArea->u.Flags.Image)
+    {
+        /* For image mappings, we get the file alignment from the image information. */
+        FileAlignment = 1 << Subsection->ControlArea->Segment->u2.ImageInformation->ZeroBits;
+    }
+    else
+    {
+        /* Regular file mappings are page-aligned */
+        FileAlignment = PAGE_SIZE;
+    }
+
+    /* We read a 64k range if we can. Set the PTEs up. */
+    FirstPte = Subsection->SubsectionBase + ALIGN_DOWN_BY(PointerPte - Subsection->SubsectionBase, _64K >> PAGE_SHIFT);
+    LastPte = FirstPte + (_64K >> PAGE_SHIFT) - 1;
+    if (LastPte >= (Subsection->SubsectionBase + BYTES_TO_PAGES(Subsection->NumberOfFullSectors * FileAlignment)))
+        LastPte = Subsection->SubsectionBase + BYTES_TO_PAGES(Subsection->NumberOfFullSectors * FileAlignment) - 1;
+
+    ASSERT(LastPte >= FirstPte);
+    ASSERT(LastPte < (Subsection->SubsectionBase + Subsection->PtesInSubsection));
+    ASSERT(PointerPte >= FirstPte);
+    ASSERT(PointerPte <= LastPte);
+
+    /* Allocate an MDL */
+    Mdl = IoAllocateMdl(NULL, (LastPte - FirstPte + 1) * PAGE_SIZE, FALSE, FALSE, NULL);
+    if (!Mdl)
+        return STATUS_INSUFFICIENT_RESOURCES;
+    PfnArray = MmGetMdlPfnArray(Mdl);
+
+    /* Get a page for everyone */
+    CurrentPte = FirstPte;
+    while (CurrentPte <= LastPte)
+    {
+        PMMPFN Pfn1;
+        PFN_NUMBER Page;
+
+        MI_SET_USAGE(MI_USAGE_SECTION);
+#if MI_TRACE_PFNS
+        if ((Subsection->ControlArea->FilePointer->FileName.Buffer)
+            && (Subsection->ControlArea->FilePointer->FileName.Length > 0))
+        {
+            PUNICODE_STRING FileName = &Subsection->ControlArea->FilePointer->FileName;
+            PWCHAR pos = NULL;
+            ULONG len = 0;
+
+            pos = &FileName->Buffer[(FileName->Length / sizeof(WCHAR)) - 1];
+            while ((pos > FileName->Buffer) && (*pos != L'\\'))
+                pos--;
+            if (*pos == L'\\')
+                pos++;
+
+            len = (&FileName->Buffer[FileName->Length / sizeof(WCHAR)]) - pos;
+            if (len > sizeof(MI_PFN_CURRENT_PROCESS_NAME))
+                len = sizeof(MI_PFN_CURRENT_PROCESS_NAME);
+
+            if (len < sizeof(MI_PFN_CURRENT_PROCESS_NAME))
+                MI_PFN_CURRENT_PROCESS_NAME[len] = 0;
+            while (len--)
+                MI_PFN_CURRENT_PROCESS_NAME[len] = pos[len];
+        }
+#endif
+
+        Page = MiRemoveAnyPage(MI_GET_NEXT_COLOR());
+
+        if (!Page)
+        {
+            /* Roll-back everything */
+            CurrentPte--;
+            while (CurrentPte >= FirstPte)
+            {
+                Page = PFN_FROM_PTE(CurrentPte);
+                Pfn1 = MiGetPfnEntry(Page);
+
+                MI_SET_PFN_DELETED(Pfn1);
+                MiDecrementShareCount(Pfn1, Page);
+                return STATUS_NO_MEMORY;
+            }
+        }
+
+        ASSERT(CurrentPte->u.Hard.Valid == 0);
+        MiInitializePfn(Page, CurrentPte, FALSE);
+        MI_MAKE_TRANSITION_PTE(CurrentPte, Page, Subsection->u.SubsectionFlags.Protection);
+        PfnArray[CurrentPte - FirstPte] = Page;
+
+        /* Tell everyone we are reading here */
+        Pfn1 = MiGetPfnEntry(Page);
+        Pfn1->u3.e1.ReadInProgress = 1;
+
+        CurrentPte++;
+    }
+
+    /* We can release the lock while reading */
+    MiReleasePfnLock(*Irql);
+
+    /* Finish MDL setup */
+    Mdl->MdlFlags |= MDL_PAGES_LOCKED | MDL_IO_PAGE_READ;
+
+    /* Calulate the file offset */
+    FileOffset.QuadPart = Subsection->StartingSector * FileAlignment +
+        ((FirstPte - Subsection->SubsectionBase) * PAGE_SIZE);
+
+    /* Perform the read */
+    KeInitializeEvent(&ReadEvent, NotificationEvent, FALSE);
+    DPRINT("Performing the read.\n");
+    Status = IoPageRead(Subsection->ControlArea->FilePointer, Mdl, &FileOffset, &ReadEvent, &Iosb);
+    if (Status == STATUS_PENDING)
+    {
+        KeWaitForSingleObject(&ReadEvent, WrPageIn, KernelMode, FALSE, NULL);
+        Status = Iosb.Status;
+    }
+    if (Mdl->MdlFlags & MDL_MAPPED_TO_SYSTEM_VA)
+        MmUnmapLockedPages(Mdl->MappedSystemVa, Mdl);
+    IoFreeMdl(Mdl);
+
+    DPRINT("Done\n");
+
+    if (NT_SUCCESS(Status))
+    {
+        /* Zero-out the tail of the last page if needed */
+        if (((LastPte - Subsection->SubsectionBase + 1) * PAGE_SIZE) > (Subsection->NumberOfFullSectors * FileAlignment))
+        {
+            ULONG ZeroSize = ((LastPte - Subsection->SubsectionBase + 1) * PAGE_SIZE) - (Subsection->NumberOfFullSectors * FileAlignment);
+            PVOID PageMap;
+
+            /* Check that the difference is less than a page */
+            ASSERT(ZeroSize < PAGE_SIZE);
+
+            DPRINT1("Zeroing-out the tail of our subsection\n");
+
+            /* The last page may contain data which is not valid for this subsection. Zero this out */
+            PageMap = MiMapPageInHyperSpace(PsGetCurrentProcess(), PFN_FROM_PTE(LastPte), Irql);
+
+            RtlZeroMemory(Add2Ptr(PageMap, PAGE_SIZE - ZeroSize), ZeroSize);
+
+            MiUnmapPageInHyperSpace(PsGetCurrentProcess(), PageMap, *Irql);
+        }
+    }
+
+    /* Grab the lock again */
+    *Irql = MiAcquirePfnLock();
+
+    /* Finish with our PTEs */
+    CurrentPte = FirstPte;
+    while (CurrentPte <= LastPte)
+    {
+        PFN_NUMBER Page = PFN_FROM_PTE(CurrentPte);
+        PMMPFN Pfn1 = MiGetPfnEntry(Page);
+
+        /* We're done reading */
+        Pfn1->u3.e1.ReadInProgress = 0;
+        if (Pfn1->u1.Event)
+            KeSetEvent(Pfn1->u1.Event, IO_NO_INCREMENT, FALSE);
+
+        /* Did we succeed in reading ?*/
+        if (!NT_SUCCESS(Status))
+        {
+            DPRINT1("Failed reading page: Status 0x%08X\n", Status);
+            /* Mark as such */
+            Pfn1->u4.InPageError = 1;
+            Pfn1->u1.ReadStatus = Status;
+            /* We let the PTEs in transition state */
+        }
+        else
+        {
+            MMPTE TempPte;
+            TempPte.u.Hard.Valid = 1;
+            TempPte.u.Hard.PageFrameNumber = Page;
+
+            MI_WRITE_VALID_PTE(CurrentPte, TempPte);
+        }
+
+        CurrentPte++;
+    }
+
+    return NT_SUCCESS(Status) ? STATUS_SUCCESS : STATUS_IN_PAGE_ERROR;
+}
+
+static
+NTSTATUS
+NTAPI
 MiResolveTransitionFault(IN BOOLEAN StoreInstruction,
                          IN PVOID FaultingAddress,
                          IN PMMPTE PointerPte,
@@ -976,8 +1197,8 @@ MiResolveTransitionFault(IN BOOLEAN StoreInstruction,
     PMMPFN Pfn1;
     MMPTE TempPte;
     PMMPTE PointerToPteForProtoPage;
-    DPRINT("Transition fault on 0x%p with PTE 0x%p in process %s\n",
-            FaultingAddress, PointerPte, CurrentProcess->ImageFileName);
+    DPRINT("Transition fault on 0x%p with PTE 0x%p in process %.*s\n",
+            FaultingAddress, PointerPte, sizeof(CurrentProcess->ImageFileName), CurrentProcess->ImageFileName);
 
     /* Windowss does this check */
     ASSERT(*InPageBlock == NULL);
@@ -1253,11 +1474,19 @@ MiResolveProtoPteFault(IN BOOLEAN StoreInstruction,
     /* Check for clone PTEs */
     if (PointerPte <= MiHighestUserPte) ASSERT(Process->CloneRoot == NULL);
 
-    /* We don't support mapped files yet */
-    ASSERT(TempPte.u.Soft.Prototype == 0);
-
-    /* We might however have transition PTEs */
-    if (TempPte.u.Soft.Transition == 1)
+    /* Which kind of PTE is this ? */
+    if (TempPte.u.Soft.Prototype)
+    {
+        /* This is a mapped file */
+        Status = MiResolveMappedFileFault(PointerProtoPte, &OldIrql);
+        if (!NT_SUCCESS(Status))
+        {
+            DPRINT1("MiResolveMappedFileFault failed. Status: 0x%08x.\n", Status);
+            MiReleasePfnLock(OldIrql);
+            return Status;
+        }
+    }
+    else if (TempPte.u.Soft.Transition == 1)
     {
         /* Resolve the transition fault */
         ASSERT(OldIrql != MM_NOIRQL);
@@ -1267,6 +1496,26 @@ MiResolveProtoPteFault(IN BOOLEAN StoreInstruction,
                                           Process,
                                           OldIrql,
                                           &InPageBlock);
+        if (InPageBlock != NULL)
+        {
+            KEVENT CurrentPageEvent;
+            PKEVENT PreviousPageEvent;
+
+            /* Another thread is reading or writing this page. Put us into the waiting queue. */
+            KeInitializeEvent(&CurrentPageEvent, NotificationEvent, FALSE);
+            PreviousPageEvent = *InPageBlock;
+            *InPageBlock = &CurrentPageEvent;
+
+            /* Release the lock and wait for the transition fault to finish */
+            MiReleasePfnLock(OldIrql);
+            KeWaitForSingleObject(&CurrentPageEvent, WrPageIn, KernelMode, FALSE, NULL);
+
+            OldIrql = MiAcquirePfnLock();
+            /* Let the chain go on */
+            if (PreviousPageEvent)
+                KeSetEvent(PreviousPageEvent, IO_NO_INCREMENT, FALSE);
+        }
+
         ASSERT(NT_SUCCESS(Status));
     }
     else
