@@ -174,6 +174,7 @@ typedef struct _PCI_REGISTRY_INFO_INTERNAL
 //
 // PCI Type 1 Configuration Register
 //
+#include <pshpack1.h>
 typedef struct _PCI_TYPE1_CFG_BITS
 {
     union
@@ -260,6 +261,7 @@ typedef struct _PCI_TYPE1_CFG_CYCLE_BITS
         ULONG AsULONG;
     } u;
 } PCI_TYPE1_CFG_CYCLE_BITS, *PPCI_TYPE1_CFG_CYCLE_BITS;
+#include <poppack.h>
 
 typedef struct _ARRAY
 {
