@@ -126,6 +126,9 @@ DissectArcPath2(
     OUT PULONG Partition,
     OUT PULONG PathSyntax)
 {
+    char* next_token;
+    const char* token;
+
     /* Detect ramdisk() */
     if (_strnicmp(ArcPath, "ramdisk(0)", 10) == 0)
     {
@@ -134,42 +137,163 @@ DissectArcPath2(
         *PathSyntax = 2;
         return TRUE;
     }
-    /* Detect scsi()disk()rdisk()partition() */
-    else if (sscanf(ArcPath, "scsi(%lu)disk(%lu)rdisk(%lu)partition(%lu)", x, y, z, Partition) == 4)
+    /* Detect scsi()... */
+    else if (_strnicmp(ArcPath, "scsi(", 5) == 0)
     {
         *PathSyntax = 0;
-        return TRUE;
+        token = &ArcPath[5];
     }
-    /* Detect scsi()cdrom()fdisk() */
-    else if (sscanf(ArcPath, "scsi(%lu)cdrom(%lu)fdisk(%lu)", x, y, z) == 3)
-    {
-        *Partition = 0;
-        *PathSyntax = 0;
-        return TRUE;
-    }
-    /* Detect multi()disk()rdisk()partition() */
-    else if (sscanf(ArcPath, "multi(%lu)disk(%lu)rdisk(%lu)partition(%lu)", x, y, z, Partition) == 4)
+    /* Detect multi()... */
+    else if (_strnicmp(ArcPath, "multi(", 6) == 0)
     {
         *PathSyntax = 1;
-        return TRUE;
+        token = &ArcPath[6];
     }
-    /* Detect multi()disk()cdrom() */
-    else if (sscanf(ArcPath, "multi(%lu)disk(%lu)cdrom(%lu)", x, y, z) == 3)
+    else
     {
-        *Partition = 1;
-        *PathSyntax = 1;
-        return TRUE;
-    }
-    /* Detect multi()disk()fdisk() */
-    else if (sscanf(ArcPath, "multi(%lu)disk(%lu)fdisk(%lu)", x, y, z) == 3)
-    {
-        *Partition = 1;
-        *PathSyntax = 1;
-        return TRUE;
+        return FALSE;
     }
 
-    /* Unknown syntax */
-    return FALSE;
+    *x = strtoul(token, &next_token, 10);
+    if (next_token == token)
+        return FALSE;
+
+    if (*next_token != ')')
+        return FALSE;
+
+    token = next_token + 1;
+    /* check disk() */
+    if (_strnicmp(token, "disk(", 5) == 0)
+    {
+        token = &token[5];
+
+        *y = strtoul(token, &next_token, 10);
+
+        if (next_token == token)
+            return FALSE;
+
+        if (*next_token != ')')
+            return FALSE;
+
+        token = next_token + 1;
+
+        /* We are at
+         * scsi()disk() --> *PathSyntax == 0
+         * multi()disk() --> *PathSyntax == 1
+         */
+        if (_strnicmp(token, "rdisk(", 6) == 0)
+        {
+            token = &token[6];
+
+            *z = strtoul(token, &next_token, 10);
+
+            if (next_token == token)
+                return FALSE;
+
+            if (*next_token != ')')
+                return FALSE;
+
+            token = next_token + 1;
+
+            /* We are at
+             * scsi()disk()rdisk() --> *PathSyntax == 0
+             * multi()disk()rdisk() --> *PathSyntax == 1
+             */
+            if (_strnicmp(token, "partition(", 10) == 0)
+            {
+                token = &token[10];
+
+                *Partition = strtoul(token, &next_token, 10);
+
+                if (next_token == token)
+                    return FALSE;
+
+                if (*next_token != ')')
+                    return FALSE;
+
+                /*
+                 * scsi()disk()rdisk()partition()
+                 * multi()disk()rdisk()partition()
+                 * All good
+                 */
+                return TRUE;
+            }
+            else
+            {
+                return FALSE;
+            }
+        }
+        else
+        {
+            /* only rdisk() is allowed after scsi()disk() */
+            if (*PathSyntax == 0)
+                return FALSE;
+
+            /* We are at multi()disk() */
+            if ((_strnicmp(token, "cdrom(", 6) == 0) ||
+                (_strnicmp(token, "fdisk(", 6) == 0))
+            {
+                token = &token[6];
+
+                *z = strtoul(token, &next_token, 10);
+
+                if (next_token == token)
+                    return FALSE;
+
+                if (*next_token != ')')
+                    return FALSE;
+
+                /*
+                 * multi()disk()cdrom()
+                 * multi()disk()fdisk()
+                 * All good
+                 */
+                *Partition = 1;
+                return TRUE;
+            }
+            else
+            {
+                return FALSE;
+            }
+        }
+    }
+
+    /* Only disk() is allowed after multi() */
+    if (*PathSyntax == 1)
+        return FALSE;
+
+    /* We are at scsi() scsi()disk() was handled above.
+     * Only cdrom() is allowed now */
+    if (_strnicmp(token, "cdrom(", 6) != 0)
+        return FALSE;
+
+    token = &token[6];
+
+    *y = strtoul(token, &next_token, 10);
+    if (next_token == token)
+        return FALSE;
+
+    if (*next_token != ')')
+        return FALSE;
+
+    token = next_token + 1;
+
+    /* We are at scsi()cdrom()
+     * Only fdisk() is allowed now */
+    if (_strnicmp(token, "fdisk(", 6) != 0)
+        return FALSE;
+
+    token = &token[6];
+
+    *z = strtoul(token, &next_token, 10);
+    if (next_token == token)
+        return FALSE;
+
+    if (*next_token != ')')
+        return FALSE;
+
+    *Partition = 0;
+    return TRUE;
 }
 
 VOID ConstructArcPath(PCHAR ArcPath, PCHAR SystemFolder, UCHAR Disk, ULONG Partition)
