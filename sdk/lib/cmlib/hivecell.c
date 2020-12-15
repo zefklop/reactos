@@ -5,39 +5,9 @@
  *            Copyright 2001 - 2005 Eric Kohl
  */
 
-#include "cmlib.h"
+#include "cmlib_private.h"
 #define NDEBUG
 #include <debug.h>
-
-static __inline PHCELL CMAPI
-HvpGetCellHeader(
-    PHHIVE RegistryHive,
-    HCELL_INDEX CellIndex)
-{
-    PVOID Block;
-
-    CMLTRACE(CMLIB_HCELL_DEBUG, "%s - Hive %p, CellIndex %08lx\n",
-             __FUNCTION__, RegistryHive, CellIndex);
-
-    ASSERT(CellIndex != HCELL_NIL);
-    if (!RegistryHive->Flat)
-    {
-        ULONG CellType   = HvGetCellType(CellIndex);
-        ULONG CellBlock  = HvGetCellBlock(CellIndex);
-        ULONG CellOffset = (CellIndex & HCELL_OFFSET_MASK) >> HCELL_OFFSET_SHIFT;
-
-        ASSERT(CellBlock < RegistryHive->Storage[CellType].Length);
-        Block = (PVOID)RegistryHive->Storage[CellType].BlockList[CellBlock].BlockAddress;
-        ASSERT(Block != NULL);
-        return (PVOID)((ULONG_PTR)Block + CellOffset);
-    }
-    else
-    {
-        ASSERT(HvGetCellType(CellIndex) == Stable);
-        return (PVOID)((ULONG_PTR)RegistryHive->BaseBlock + HBLOCK_SIZE +
-                       CellIndex);
-    }
-}
 
 BOOLEAN CMAPI
 HvIsCellAllocated(IN PHHIVE RegistryHive,
@@ -61,15 +31,6 @@ HvIsCellAllocated(IN PHHIVE RegistryHive,
 
     /* No valid block, fail */
     return FALSE;
-}
-
-PVOID CMAPI
-HvGetCell(
-    PHHIVE RegistryHive,
-    HCELL_INDEX CellIndex)
-{
-    ASSERT(CellIndex != HCELL_NIL);
-    return (PVOID)(HvpGetCellHeader(RegistryHive, CellIndex) + 1);
 }
 
 static __inline LONG CMAPI
@@ -141,59 +102,6 @@ HvIsCellDirty(IN PHHIVE Hive,
 
     /* Return result as boolean*/
     return IsDirty;
-}
-
-static __inline ULONG CMAPI
-HvpComputeFreeListIndex(
-    ULONG Size)
-{
-    ULONG Index;
-    static CCHAR FindFirstSet[128] = {
-        0, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3,
-        4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-        5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
-        5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
-        6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-        6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-        6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-        6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6};
-
-    ASSERT(Size >= (1 << 3));
-    Index = (Size >> 3) - 1;
-    if (Index >= 16)
-    {
-        if (Index > 127)
-            Index = 23;
-        else
-            Index = FindFirstSet[Index] + 16;
-    }
-
-    return Index;
-}
-
-static NTSTATUS CMAPI
-HvpAddFree(
-    PHHIVE RegistryHive,
-    PHCELL FreeBlock,
-    HCELL_INDEX FreeIndex)
-{
-    PHCELL_INDEX FreeBlockData;
-    HSTORAGE_TYPE Storage;
-    ULONG Index;
-
-    ASSERT(RegistryHive != NULL);
-    ASSERT(FreeBlock != NULL);
-
-    Storage = HvGetCellType(FreeIndex);
-    Index = HvpComputeFreeListIndex((ULONG)FreeBlock->Size);
-
-    FreeBlockData = (PHCELL_INDEX)(FreeBlock + 1);
-    *FreeBlockData = RegistryHive->Storage[Storage].FreeDisplay[Index];
-    RegistryHive->Storage[Storage].FreeDisplay[Index] = FreeIndex;
-
-    /* FIXME: Eventually get rid of free bins. */
-
-    return STATUS_SUCCESS;
 }
 
 static VOID CMAPI
@@ -273,57 +181,6 @@ HvpFindFree(
     }
 
     return HCELL_NIL;
-}
-
-NTSTATUS CMAPI
-HvpCreateHiveFreeCellList(
-    PHHIVE Hive)
-{
-    HCELL_INDEX BlockOffset;
-    PHCELL FreeBlock;
-    ULONG BlockIndex;
-    ULONG FreeOffset;
-    PHBIN Bin;
-    NTSTATUS Status;
-    ULONG Index;
-
-    /* Initialize the free cell list */
-    for (Index = 0; Index < 24; Index++)
-    {
-        Hive->Storage[Stable].FreeDisplay[Index] = HCELL_NIL;
-        Hive->Storage[Volatile].FreeDisplay[Index] = HCELL_NIL;
-    }
-
-    BlockOffset = 0;
-    BlockIndex = 0;
-    while (BlockIndex < Hive->Storage[Stable].Length)
-    {
-        Bin = (PHBIN)Hive->Storage[Stable].BlockList[BlockIndex].BinAddress;
-
-        /* Search free blocks and add to list */
-        FreeOffset = sizeof(HBIN);
-        while (FreeOffset < Bin->Size)
-        {
-            FreeBlock = (PHCELL)((ULONG_PTR)Bin + FreeOffset);
-            if (FreeBlock->Size > 0)
-            {
-                Status = HvpAddFree(Hive, FreeBlock, Bin->FileOffset + FreeOffset);
-                if (!NT_SUCCESS(Status))
-                    return Status;
-
-                FreeOffset += FreeBlock->Size;
-            }
-            else
-            {
-                FreeOffset -= FreeBlock->Size;
-            }
-        }
-
-        BlockIndex += Bin->Size / HBLOCK_SIZE;
-        BlockOffset += Bin->Size;
-    }
-
-    return STATUS_SUCCESS;
 }
 
 HCELL_INDEX CMAPI

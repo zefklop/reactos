@@ -5,17 +5,35 @@ add_definitions(
 
 list(APPEND SOURCE
     cminit.c
+    cmfindsubkey.c
+    compressedname.c
     cmindex.c
     cmkeydel.c
     cmname.c
+    cmprepare.c
     cmse.c
     cmvalue.c
+    compareindex.c
+    comparename.c
+    create.c
+    free.c
+    freecell.c
+    flathive.c
+    hashkey.c
     hivebin.c
     hivecell.c
-    hiveinit.c
+    hivefree.c
+    hiveload.c
     hivesum.c
     hivewrt.c
-    cmlib.h)
+    HvGetCell.c
+    HvInitialize.c
+    memhive.c
+    trace.c
+    valuename.c
+    verify.c
+    cmlib.h
+    valuedata.c)
 
 if(CMAKE_CROSSCOMPILING)
     add_library(cmlib ${SOURCE})
