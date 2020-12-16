@@ -22,7 +22,7 @@ add_library(kdcom MODULE
 
 set_module_type(kdcom module IMAGEBASE 0x00010000)
 set_subsystem(kdcom native)
-add_importlibs(kdcom ntoskrnl hal)
 target_link_libraries(kdcom cportlib)
+add_importlibs(kdcom ntoskrnl hal)
 add_pch(kdcom kdgdb.h SOURCE)
 add_cd_file(TARGET kdcom DESTINATION reactos/system32 NO_CAB FOR all)

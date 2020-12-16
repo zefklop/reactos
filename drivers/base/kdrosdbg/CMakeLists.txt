@@ -8,7 +8,7 @@ list(APPEND SOURCE
 
 add_library(kdcom MODULE ${SOURCE})
 set_module_type(kdcom kerneldll ENTRYPOINT 0)
-add_importlibs(kdcom ntoskrnl hal)
 target_link_libraries(kdcom cportlib)
+add_importlibs(kdcom ntoskrnl hal)
 add_dependencies(kdcom psdk)
 add_cd_file(TARGET kdcom DESTINATION reactos/system32 NO_CAB FOR all)
