@@ -132,10 +132,9 @@ KiComputeReciprocal(IN LONG Divisor,
         /* Increase the loop (bit) count */
         BitCount++;
 
-        /* Calculate the current fraction */
-        Reciprocal.HighPart = (Reciprocal.HighPart << 1) |
-                              (Reciprocal.LowPart >> 31);
-        Reciprocal.LowPart <<= 1;
+        /* Calculate the current fraction. */
+        Reciprocal.HighPart = (((ULONG)Reciprocal.HighPart & 0x7FFFFFFF) << 1) | (Reciprocal.LowPart >> 31);
+        Reciprocal.LowPart = ((Reciprocal.LowPart & 0x7FFFFFFF) << 1);
 
         /* Double the remainder and see if we went past the divisor */
         Remainder <<= 1;
