@@ -644,16 +644,16 @@ KiGetMachineBootPointers(IN PKGDTENTRY *Gdt,
 
     /* Get the KPCR itself */
     *Pcr = (PKIPCR)(ULONG_PTR)(PcrSelector.BaseLow |
-                               PcrSelector.HighWord.Bytes.BaseMid << 16 |
-                               PcrSelector.HighWord.Bytes.BaseHi << 24);
+                               (ULONG)PcrSelector.HighWord.Bytes.BaseMid << 16 |
+                               (ULONG)PcrSelector.HighWord.Bytes.BaseHi << 24);
 
     /* Get TSS Selector, mask it and get its GDT Entry */
     TssSelector = *(PKGDTENTRY)((ULONG_PTR)*Gdt + (Tr & ~RPL_MASK));
 
     /* Get the KTSS itself */
     *Tss = (PKTSS)(ULONG_PTR)(TssSelector.BaseLow |
-                              TssSelector.HighWord.Bytes.BaseMid << 16 |
-                              TssSelector.HighWord.Bytes.BaseHi << 24);
+                              (ULONG)TssSelector.HighWord.Bytes.BaseMid << 16 |
+                              (ULONG)TssSelector.HighWord.Bytes.BaseHi << 24);
 }
 
 CODE_SEG("INIT")
