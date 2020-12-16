@@ -2270,9 +2270,12 @@ RtlCopyUnicodeString(
                            SourceString->Length);
         DestinationString->Length = (USHORT)SourceLength;
 
-        RtlCopyMemory(DestinationString->Buffer,
-                      SourceString->Buffer,
-                      SourceLength);
+        if (SourceLength)
+        {
+            RtlCopyMemory(DestinationString->Buffer,
+                          SourceString->Buffer,
+                          SourceLength);
+        }
 
         if (DestinationString->Length < DestinationString->MaximumLength)
         {
