@@ -29,6 +29,11 @@ if(NOT MSVC)
     target_link_libraries(pseh chkstk)
     add_dependencies(pseh psdk)
 
+    if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+        # Do not sanitize PSEH
+        target_compile_options(pseh PRIVATE -fno-sanitize=all)
+    endif()
+
 else()
 
     if(ARCH STREQUAL "amd64")

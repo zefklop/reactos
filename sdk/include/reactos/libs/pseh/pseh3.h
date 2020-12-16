@@ -16,6 +16,9 @@
 extern "C" {
 #endif
 
+/* Do not sanitize SEH3 funcs */
+#define ATTRIBUTE_NO_SANITIZE __attribute__((no_sanitize("all")))
+
 /* CLANG must safe non-volatiles, because it uses a return-twice algorithm */
 #if defined(__clang__) && !defined(_SEH3$_FRAME_ALL_NONVOLATILES)
 #define _SEH3$_FRAME_ALL_NONVOLATILES 1
@@ -83,10 +86,10 @@ typedef struct _SEH3$_REGISTRATION_FRAME
 } SEH3$_REGISTRATION_FRAME ,*PSEH3$_REGISTRATION_FRAME;
 
 /* Prevent gcc from inlining functions that use SEH. */
-static inline __attribute__((always_inline)) __attribute__((returns_twice)) void _SEH3$_PreventInlining() {}
+static inline ATTRIBUTE_NO_SANITIZE __attribute__((always_inline)) __attribute__((returns_twice)) void _SEH3$_PreventInlining() {}
 
 /* Unregister the root frame */
-extern inline __attribute__((always_inline,gnu_inline))
+extern inline ATTRIBUTE_NO_SANITIZE __attribute__((always_inline,gnu_inline))
 void _SEH3$_UnregisterFrame(volatile SEH3$_REGISTRATION_FRAME *RegistrationFrame)
 {
     asm volatile ("movl %k[NewHead], %%fs:0"
@@ -94,7 +97,7 @@ void _SEH3$_UnregisterFrame(volatile SEH3$_REGISTRATION_FRAME *RegistrationFrame
 }
 
 /* Unregister a trylevel frame */
-extern inline __attribute__((always_inline,gnu_inline))
+extern inline ATTRIBUTE_NO_SANITIZE __attribute__((always_inline,gnu_inline))
 void _SEH3$_UnregisterTryLevel(
     volatile SEH3$_REGISTRATION_FRAME *TrylevelFrame)
 {
@@ -122,6 +125,7 @@ void * __cdecl __attribute__((error("Can only be used inside an exception filter
 int
 __attribute__((regparm(3)))
 __attribute__((returns_twice))
+ATTRIBUTE_NO_SANITIZE
 _SEH3$_RegisterFrameWithNonVolatiles(
     volatile SEH3$_REGISTRATION_FRAME* RegistrationFrame,
     const SEH3$_SCOPE_TABLE* ScopeTable,
@@ -130,6 +134,7 @@ _SEH3$_RegisterFrameWithNonVolatiles(
 int
 __attribute__((regparm(3)))
 __attribute__((returns_twice))
+ATTRIBUTE_NO_SANITIZE
 _SEH3$_RegisterTryLevelWithNonVolatiles(
     volatile SEH3$_REGISTRATION_FRAME* RegistrationFrame,
     const SEH3$_SCOPE_TABLE* ScopeTable,
@@ -220,6 +225,7 @@ _SEH3$_RegisterTryLevelWithNonVolatiles(
 
 /* Use the global unregister function */
 void
+ATTRIBUTE_NO_SANITIZE
 __attribute__((regparm(1)))
 _SEH3$_AutoCleanup(
     volatile SEH3$_REGISTRATION_FRAME *Frame);
@@ -264,7 +270,7 @@ _SEH3$_AutoCleanup(
 #else /* __cplusplus || __clang__ */
 
 #define _SEH3$_DECLARE_EXCEPT_INTRINSICS() \
-    inline __attribute__((always_inline, gnu_inline)) \
+    inline ATTRIBUTE_NO_SANITIZE __attribute__((always_inline, gnu_inline)) \
     unsigned long _exception_code() { return _SEH3$_TrylevelFrame.ExceptionCode; }
 
 /* On GCC the filter function is a nested function with __fastcall calling
@@ -276,10 +282,10 @@ _SEH3$_AutoCleanup(
    the function with an arbitrary base address in eax first and then use the
    result to calculate the correct address for a second call to the function. */
 #define _SEH3$_DECLARE_FILTER_FUNC(_Name) \
-    auto int __fastcall _Name(int Action)
+    auto ATTRIBUTE_NO_SANITIZE int __fastcall _Name(int Action)
 
 #define _SEH3$_NESTED_FUNC_OPEN(_Name) \
-    int __fastcall _Name(int Action) \
+    ATTRIBUTE_NO_SANITIZE int __fastcall _Name(int Action) \
     { \
         /* This is a fancy way to get information about the frame layout */ \
         if (Action == 0) return (int)&_SEH3$_TrylevelFrame;
@@ -289,9 +295,9 @@ _SEH3$_AutoCleanup(
         /* Declare the intrinsics for exception filters */ \
 _Pragma("GCC diagnostic push") \
 _Pragma("GCC diagnostic ignored \"-Wshadow\"") \
-        inline __attribute__((always_inline, gnu_inline)) \
+        inline ATTRIBUTE_NO_SANITIZE __attribute__((always_inline, gnu_inline)) \
         unsigned long _exception_code() { return _SEH3$_TrylevelFrame.ExceptionCode; } \
-        inline __attribute__((always_inline, gnu_inline)) \
+        inline ATTRIBUTE_NO_SANITIZE __attribute__((always_inline, gnu_inline)) \
         void * _exception_info() { return _SEH3$_TrylevelFrame.ExceptionPointers; } \
 _Pragma("GCC diagnostic pop") \
 \
@@ -302,7 +308,7 @@ _Pragma("GCC diagnostic pop") \
 #define _SEH3$_FINALLY_FUNC_OPEN(_Name) \
     _SEH3$_NESTED_FUNC_OPEN(_Name) \
         /* Declare the intrinsics for the finally function */ \
-        inline __attribute__((always_inline, gnu_inline)) \
+        inline ATTRIBUTE_NO_SANITIZE __attribute__((always_inline, gnu_inline)) \
         int _abnormal_termination() { return (_SEH3$_TrylevelFrame.ExceptionPointers != 0); } \
 \
         /* This construct makes sure that the finally function returns */ \
@@ -315,10 +321,10 @@ _Pragma("GCC diagnostic pop") \
 #define _SEH3$_FINALLY(_Finally) (_Finally)
 
 #define _SEH3$_DEFINE_DUMMY_FINALLY(_Name) \
-    auto inline __attribute__((always_inline,gnu_inline)) int _Name(int Action) { (void)Action; return 0; }
+    auto inline ATTRIBUTE_NO_SANITIZE __attribute__((always_inline,gnu_inline)) int _Name(int Action) { (void)Action; return 0; }
 
 #define _SEH3$_DECLARE_CLEANUP_FUNC(_Name) \
-    auto inline __attribute__((always_inline,gnu_inline)) void _Name(volatile SEH3$_REGISTRATION_FRAME *p)
+    auto inline ATTRIBUTE_NO_SANITIZE __attribute__((always_inline,gnu_inline)) void _Name(volatile SEH3$_REGISTRATION_FRAME *p)
 
 #define _SEH3$_DEFINE_CLEANUP_FUNC(_Name) \
     _SEH3$_DECLARE_CLEANUP_FUNC(_Name) \
