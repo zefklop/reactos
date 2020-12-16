@@ -1029,9 +1029,9 @@ KdbpRetrieveTss(
     }
     if (pType) *pType = Desc.HighWord.Bits.Type;
 
-    Tss = (PKTSS)(ULONG_PTR)(Desc.BaseLow |
-                             Desc.HighWord.Bytes.BaseMid << 16 |
-                             Desc.HighWord.Bytes.BaseHi << 24);
+    Tss = (PKTSS)(ULONG_PTR)((ULONG)Desc.BaseLow |
+                             (ULONG)Desc.HighWord.Bytes.BaseMid << 16 |
+                             (ULONG)Desc.HighWord.Bytes.BaseHi << 24);
 
     return Tss;
 }
