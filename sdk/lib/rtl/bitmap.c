@@ -21,6 +21,7 @@
 #ifdef USE_RTL_BITMAP64
 #define _BITCOUNT 64
 #define MAXINDEX 0xFFFFFFFFFFFFFFFF
+#define _ONE 1ULL
 typedef ULONG64 BITMAP_INDEX, *PBITMAP_INDEX;
 typedef ULONG64 BITMAP_BUFFER, *PBITMAP_BUFFER;
 #define RTL_BITMAP RTL_BITMAP64
@@ -61,6 +62,7 @@ typedef ULONG64 BITMAP_BUFFER, *PBITMAP_BUFFER;
 #else
 #define _BITCOUNT 32
 #define MAXINDEX 0xFFFFFFFF
+#define _ONE 1UL
 typedef ULONG BITMAP_INDEX, *PBITMAP_INDEX;
 typedef ULONG BITMAP_BUFFER, *PBITMAP_BUFFER;
 #endif
@@ -296,7 +298,7 @@ RtlClearBit(
     _In_ BITMAP_INDEX BitNumber)
 {
     ASSERT(BitNumber <= BitMapHeader->SizeOfBitMap);
-    BitMapHeader->Buffer[BitNumber / _BITCOUNT] &= ~(1 << (BitNumber & (_BITCOUNT - 1)));
+    BitMapHeader->Buffer[BitNumber / _BITCOUNT] &= ~(_ONE << (BitNumber & (_BITCOUNT - 1)));
 }
 
 VOID

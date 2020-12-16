@@ -2057,7 +2057,7 @@ RtlAllocateHeap(IN PVOID HeapPtr,
             FreeListsInUse = &Heap->u.FreeListsInUseUlong[InUseIndex];
 
             /* This bit magic disables all sizes which are less than the requested allocation size */
-            FreeListsInUseUlong = *FreeListsInUse++ & ~((1 << ((ULONG)Index & 0x1f)) - 1);
+            FreeListsInUseUlong = *FreeListsInUse++ & ~((1UL << ((ULONG)Index & 0x1f)) - 1);
 
             /* If size is definitily more than our lists - go directly to the non-dedicated one */
             if (InUseIndex > 3)
