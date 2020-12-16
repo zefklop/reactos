@@ -257,12 +257,13 @@ typedef struct _BUS_HANDLER
 //
 // Kernel Exports
 //
-#if (defined(_NTDRIVER_) || defined(_NTHAL_)) && !defined(_BLDR_)
-extern NTSYSAPI PHAL_PRIVATE_DISPATCH HalPrivateDispatchTable;
-#define HALPRIVATEDISPATCH ((PHAL_PRIVATE_DISPATCH)&HalPrivateDispatchTable)
-#else
-extern NTSYSAPI HAL_PRIVATE_DISPATCH HalPrivateDispatchTable;
+#ifdef _NTSYSTEM_
+extern HAL_PRIVATE_DISPATCH HalPrivateDispatchTable;
 #define HALPRIVATEDISPATCH (&HalPrivateDispatchTable)
+#else
+__CREATE_NTOS_DATA_IMPORT_ALIAS(HalPrivateDispatchTable)
+extern PHAL_PRIVATE_DISPATCH HalPrivateDispatchTable;
+#define HALPRIVATEDISPATCH HalPrivateDispatchTable
 #endif
 
 //
