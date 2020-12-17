@@ -574,7 +574,7 @@ IntLoadFontSubstList(PLIST_ENTRY pHead)
         }
 
         /* query value */
-        Status = ZwQueryValueKey(KeyHandle, &FromW, KeyValueFullInformation, 
+        Status = ZwQueryValueKey(KeyHandle, &FromW, KeyValueFullInformation,
                                  InfoBuffer, sizeof(InfoBuffer), &Length);
         pInfo = (PKEY_VALUE_FULL_INFORMATION)InfoBuffer;
         if (!NT_SUCCESS(Status) || !pInfo->DataLength)
@@ -1288,7 +1288,7 @@ IntGdiLoadFontsFromMemory(PGDI_LOAD_FONT pLoadFont,
 
         for (BitIndex = 0; BitIndex < MAXTCIINDEX; ++BitIndex)
         {
-            if (os2_ulCodePageRange1 & (1 << BitIndex))
+            if (os2_ulCodePageRange1 & (1UL << BitIndex))
             {
                 if (g_FontTci[BitIndex].ciCharset == DEFAULT_CHARSET)
                     continue;
@@ -1756,7 +1756,7 @@ IntLoadFontsInRegistry(VOID)
         }
 
         /* query value */
-        Status = ZwQueryValueKey(KeyHandle, &FontTitleW, KeyValueFullInformation, 
+        Status = ZwQueryValueKey(KeyHandle, &FontTitleW, KeyValueFullInformation,
                                  InfoBuffer, InfoSize, &Length);
         if (Status == STATUS_BUFFER_OVERFLOW || Status == STATUS_BUFFER_TOO_SMALL)
         {
@@ -1770,7 +1770,7 @@ IntLoadFontsInRegistry(VOID)
                 break;
             }
             /* try again */
-            Status = ZwQueryValueKey(KeyHandle, &FontTitleW, KeyValueFullInformation, 
+            Status = ZwQueryValueKey(KeyHandle, &FontTitleW, KeyValueFullInformation,
                                      InfoBuffer, InfoSize, &Length);
         }
         pInfo = (PKEY_VALUE_FULL_INFORMATION)InfoBuffer;
@@ -4944,7 +4944,7 @@ GetFontPenalty(const LOGFONTW *               LogFont,
     if (Long != TM->tmWeight)
     {
         /* Weight Penalty 3 */
-        /* The candidate's weight does not match the requested weight. 
+        /* The candidate's weight does not match the requested weight.
            Penalty * (weight difference/10) */
         GOT_PENALTY("Weight", 3 * (labs(Long - TM->tmWeight) / 10));
     }
@@ -6293,7 +6293,7 @@ IntExtTextOutW(
                     FLOATOBJ_Set1(&Scale);
 
                 /* do the shift before multiplying to preserve precision */
-                FLOATOBJ_MulLong(&Scale, Dx[i<<DxShift] << 6); 
+                FLOATOBJ_MulLong(&Scale, Dx[i<<DxShift] << 6);
                 TextLeft += FLOATOBJ_GetLong(&Scale);
                 DPRINT("New TextLeft2: %I64d\n", TextLeft);
             }
@@ -6557,7 +6557,7 @@ IntExtTextOutW(
                 FLOATOBJ_Set1(&Scale);
 
             /* do the shift before multiplying to preserve precision */
-            FLOATOBJ_MulLong(&Scale, Dx[i<<DxShift] << 6); 
+            FLOATOBJ_MulLong(&Scale, Dx[i<<DxShift] << 6);
             TextLeft += FLOATOBJ_GetLong(&Scale);
             DPRINT("New TextLeft2: %I64d\n", TextLeft);
         }
