@@ -495,7 +495,7 @@ CsrSbApiRequestThread(IN PVOID Parameter)
         /* Wait for a message to come in */
         Status = NtReplyWaitReceivePort(CsrSbApiPort,
                                         &PortContext,
-                                        &ReplyMsg->h,
+                                        ReplyMsg ? &ReplyMsg->h : NULL,
                                         &ReceiveMsg.h);
 
         /* Check if we didn't get success */

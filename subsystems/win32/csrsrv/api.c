@@ -398,7 +398,7 @@ CsrApiRequestThread(IN PVOID Parameter)
         /* Wait for a message to come through */
         Status = NtReplyWaitReceivePort(ReplyPort,
                                         &PortContext,
-                                        &ReplyMsg->Header,
+                                        ReplyMsg ? &ReplyMsg->Header : NULL,
                                         &ReceiveMsg.Header);
 
         /* Check if we didn't get success */
