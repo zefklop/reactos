@@ -362,7 +362,7 @@ SmpApiLoop(IN PVOID Parameter)
         /* Begin waiting on a request */
         Status = NtReplyWaitReceivePort(SmApiPort,
                                         (PVOID*)&ClientContext,
-                                        &ReplyMsg->h,
+                                        ReplyMsg ? &ReplyMsg->h : NULL,
                                         &RequestMsg.h);
         if (Status == STATUS_NO_MEMORY)
         {
