@@ -213,19 +213,61 @@
 
 /* TYPES *********************************************************************/
 
+/* Make sure that the unions & bit fields are packed */
+#include <pshpack1.h>
+
 typedef struct _GDI_TABLE_ENTRY
 {
     PVOID KernelData; /* Points to the kernel mode structure */
     DWORD ProcessId;  /* process id that created the object, 0 for stock objects */
-    union{            /* temp union structure. */
-    LONG  Type;       /* the first 16 bit is the object type including the stock obj flag, the last 16 bits is just the object type */
-    struct{
-    USHORT FullUnique; /* unique */
-    UCHAR  ObjectType; /* objt */
-    UCHAR  Flags;      /* Flags */
-    };};
+    union
+    {                           /* temp union structure. */
+        LONG  Type;             /* the first 16 bit is the object type including the stock obj flag, the last 16 bits is just the object type */
+        struct{
+            struct
+            {
+                UCHAR ObjectType : 7;
+                UCHAR Stock       :1;
+                UCHAR Spare;
+            } Unique;
+            struct
+            {
+                UCHAR  BaseType :5;
+                UCHAR  ExType   :2;
+                UCHAR  Spare    :1;
+            } DetailedType;
+            UCHAR  Flags;      /* Flags */
+        };
+    };
     PVOID UserData;   /* pUser Points to the user mode structure, usually NULL though */
 } GDI_TABLE_ENTRY, *PGDI_TABLE_ENTRY;
+
+typedef union _GDI_HANDLE
+{
+    HANDLE AsHandle;
+    ULONG_PTR AsULong;
+    struct
+    {
+        USHORT Index;
+        union
+        {
+            struct
+            {
+                UCHAR ObjectType : 7;
+                UCHAR Stock       :1;
+            };
+            struct
+            {
+                UCHAR  BaseType :5;
+                UCHAR  ExType   :2;
+                UCHAR  Stock    :1;
+            } DetailedType;
+        };
+        UCHAR Reuse;
+    };
+} GDI_HANDLE;
+
+#include <poppack.h>
 
 typedef struct _ENTRY
 {
