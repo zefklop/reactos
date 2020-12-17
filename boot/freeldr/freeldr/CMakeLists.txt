@@ -11,6 +11,11 @@ if(MSVC)
     add_compile_options("/GF")
 endif()
 
+# Optimize for size.
+if (GCC)
+    add_compile_options(-Os)
+endif()
+
 spec2def(freeldr_pe.exe freeldr.spec)
 
 if(ARCH STREQUAL "i386")
@@ -294,6 +299,13 @@ else()
     add_linker_script(freeldr_pe_dbg freeldr_i386.lds)
 endif()
 
+if (GCC AND (CMAKE_BUILD_TYPE STREQUAL "Debug"))
+    # disable sanitizer, it produces binaries which are too big
+    target_compile_options(freeldr_pe_dbg PRIVATE -fno-sanitize=all)
+    target_compile_options(freeldr_pe PRIVATE -fno-sanitize=all)
+    target_compile_options(freeldr_common PRIVATE -fno-sanitize=all)
+endif()
+
 set_image_base(freeldr_pe 0x10000)
 set_subsystem(freeldr_pe native)
 set_entrypoint(freeldr_pe RealEntryPoint)
@@ -314,6 +326,12 @@ target_link_libraries(freeldr_pe_dbg freeldr_common cportlib cmlib rtl libcntpr)
 if(STACK_PROTECTOR)
     target_link_libraries(freeldr_pe gcc_ssp)
     target_link_libraries(freeldr_pe_dbg gcc_ssp)
+endif()
+
+# -fsanitize=undefined support.
+if (GCC AND (CMAKE_BUILD_TYPE STREQUAL "Debug"))
+    target_link_libraries(freeldr_pe gcc_ubsan_nobreak)
+    target_link_libraries(freeldr_pe_dbg gcc_ubsan_nobreak)
 endif()
 
 if(RUNTIME_CHECKS)

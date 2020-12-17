@@ -137,6 +137,11 @@ if(LTCG)
     add_compile_options(-flto -fno-fat-lto-objects)
 endif()
 
+# sanitizer. Unfortunately, alignment checks take a lot of space
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    add_compile_options(-fsanitize=undefined -fno-sanitize=alignment)
+endif()
+
 if(ARCH STREQUAL "i386")
     add_compile_options(-fno-optimize-sibling-calls -fno-omit-frame-pointer)
     if(NOT CMAKE_C_COMPILER_ID STREQUAL "Clang")

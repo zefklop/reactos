@@ -31,6 +31,11 @@ if(STACK_PROTECTOR)
     add_subdirectory(gcc_ssp)
 endif()
 
+if (GCC AND (CMAKE_BUILD_TYPE STREQUAL "Debug"))
+    # -fsanitize=undefined support library
+    add_subdirectory(gcc_ubsan)
+endif()
+
 add_subdirectory(ioevent)
 add_subdirectory(lsalib)
 add_subdirectory(nt)

@@ -108,6 +108,11 @@ if(STACK_PROTECTOR)
     target_link_libraries(bootmgfw gcc_ssp)
 endif()
 
+# -fsanitize=undefined support
+if (GCC AND (CMAKE_BUILD_TYPE STREQUAL "Debug"))
+    target_link_libraries(bootmgfw gcc_ubsan_nt)
+endif()
+
 if(RUNTIME_CHECKS)
     target_link_libraries(bootmgfw runtmchk)
 endif()
@@ -154,6 +159,11 @@ target_link_libraries(rosload bootlib cportlib cmlib rtl libcntpr)
 # dynamic analysis switches
 if(STACK_PROTECTOR)
     target_link_libraries(rosload gcc_ssp)
+endif()
+
+# -fsanitize=undefined support
+if (GCC AND (CMAKE_BUILD_TYPE STREQUAL "Debug"))
+    target_link_libraries(rosload gcc_ubsan_nt)
 endif()
 
 if(RUNTIME_CHECKS)

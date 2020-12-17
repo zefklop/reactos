@@ -59,6 +59,11 @@ if(MSVC)
     add_target_link_flags(ntdll "/RELEASE")
 endif()
 
+# -fsanitize=undefined support
+if (GCC AND (CMAKE_BUILD_TYPE STREQUAL "Debug"))
+    target_sources(ntdll PRIVATE $<TARGET_OBJECTS:gcc_ubsan_nt>)
+endif()
+
 target_link_libraries(ntdll rtl ntdllsys libcntpr uuid ${PSEH_LIB})
 add_pch(ntdll include/ntdll.h "${PCH_SKIP_SOURCE}")
 add_dependencies(ntdll ntstatus asm)

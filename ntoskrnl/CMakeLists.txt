@@ -63,6 +63,12 @@ elseif(RUNTIME_CHECKS)
     target_link_libraries(ntoskrnl runtmchk)
 endif()
 
+# -fsanitize=undefined support
+if (GCC AND (CMAKE_BUILD_TYPE STREQUAL "Debug"))
+    target_sources(ntoskrnl PRIVATE $<TARGET_OBJECTS:gcc_ubsan_nt>)
+    # target_sources(ntoskrnl PRIVATE $<TARGET_OBJECTS:gcc_ubsan_hack>)
+endif()
+
 add_importlibs(ntoskrnl hal kdcom bootvid)
 add_pch(ntoskrnl ${REACTOS_SOURCE_DIR}/ntoskrnl/include/ntoskrnl.h "${PCH_SKIP_SOURCE}")
 add_dependencies(ntoskrnl psdk bugcodes asm)

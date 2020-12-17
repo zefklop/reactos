@@ -46,6 +46,11 @@ if(RUNTIME_CHECKS)
     target_link_libraries(ntkrnlmp runtmchk)
 endif()
 
+# -fsanitize=undefined support
+if (GCC AND (CMAKE_BUILD_TYPE STREQUAL "Debug"))
+    target_link_libraries(ntkrnlmp gcc_ubsan_nt)
+endif()
+
 target_link_libraries(ntkrnlmp cportlib csq ${PSEH_LIB} arbiter cmlib ntlsalib rtl ${ROSSYM_LIB} libcntpr wdmguid ioevent)
 add_importlibs(ntkrnlmp hal kdcom bootvid)
 add_pch(ntkrnlmp ${REACTOS_SOURCE_DIR}/ntoskrnl/include/ntoskrnl.h "${NTKRNLMP_PCH_SKIP_SOURCE}")
