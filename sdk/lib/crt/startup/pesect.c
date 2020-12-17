@@ -114,14 +114,14 @@ __mingw_GetSectionForAddress (LPVOID p)
 int
 __mingw_GetSectionCount (void)
 {
-  PBYTE pImageBase;
+  ULONG_PTR pImageBase;
   PIMAGE_NT_HEADERS pNTHeader;
 
-  pImageBase = (PBYTE) &__ImageBase;
-  if (! _ValidateImageBase (pImageBase))
+  pImageBase = (ULONG_PTR)&__ImageBase;
+  if (!_ValidateImageBase((PVOID)pImageBase))
     return 0;
 
-  pNTHeader = (PIMAGE_NT_HEADERS) (pImageBase + ((PIMAGE_DOS_HEADER) pImageBase)->e_lfanew);
+  pNTHeader = (PIMAGE_NT_HEADERS)(pImageBase + ((PIMAGE_DOS_HEADER)pImageBase)->e_lfanew);
 
   return (int) pNTHeader->FileHeader.NumberOfSections;
 }
@@ -205,7 +205,7 @@ __mingw_enum_import_library_names (int i)
     return NULL;
 
   pNTHeader = (PIMAGE_NT_HEADERS) (pImageBase + ((PIMAGE_DOS_HEADER) pImageBase)->e_lfanew);
-  
+
   importsStartRVA = pNTHeader->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress;
   if (!importsStartRVA)
     return NULL;
@@ -217,7 +217,7 @@ __mingw_enum_import_library_names (int i)
   importDesc = (PIMAGE_IMPORT_DESCRIPTOR) (pImageBase + importsStartRVA);
   if (!importDesc)
     return NULL;
-            
+
   for (;;)
     {
       if (importDesc->TimeDateStamp == 0 && importDesc->Name == 0)
