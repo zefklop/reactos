@@ -2293,7 +2293,8 @@ IoGetDeviceProperty(IN PDEVICE_OBJECT DeviceObject,
         if (*ResultLength <= BufferLength)
         {
             /* Buffer is all good, copy the data */
-            RtlCopyMemory(PropertyBuffer, Data, ReturnLength);
+            if (ReturnLength != 0)
+                RtlCopyMemory(PropertyBuffer, Data, ReturnLength);
 
             /* Check if we need to NULL-terminate the string */
             if (NullTerminate)
