@@ -2957,7 +2957,7 @@ FontFamilyFillInfo(PFONTFAMILYINFO Info, LPCWSTR FaceName,
 
     for (i = 0; i < MAXTCIINDEX; i++)
     {
-        fs0 = 1L << i;
+        fs0 = 1UL << i;
         if (fs.fsCsb[0] & fs0)
         {
             if (!IntTranslateCharsetInfo(&fs0, &CharSetInfo, TCI_SRCFONTSIG))
