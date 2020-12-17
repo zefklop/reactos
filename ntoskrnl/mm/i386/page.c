@@ -609,7 +609,7 @@ MmCreatePageFileMapping(PEPROCESS Process,
         KeBugCheck(MEMORY_MANAGEMENT);
     }
 
-    if (SwapEntry & (1 << 31))
+    if (SwapEntry & (1UL << 31))
     {
         KeBugCheck(MEMORY_MANAGEMENT);
     }
