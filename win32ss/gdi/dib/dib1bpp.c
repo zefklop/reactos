@@ -218,8 +218,8 @@ DIB_1BPP_BitBltSrcCopy_From1BPP (
       break;
     d += xinc;
     s += xinc;
-    dwx += xinc<<3;
-    swx += xinc<<3;
+    dwx += xinc * 8;
+    swx += xinc * 8;
   }
 }
 
