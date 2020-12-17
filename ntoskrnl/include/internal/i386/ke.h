@@ -243,7 +243,7 @@ KeQueryInterruptHandler(IN ULONG Vector)
     //
     // Read the entry from the IDT
     //
-    return (PVOID)(((Pcr->IDT[Entry].ExtendedOffset << 16) & 0xFFFF0000) |
+    return (PVOID)((((ULONG)Pcr->IDT[Entry].ExtendedOffset << 16) & 0xFFFF0000) |
                     (Pcr->IDT[Entry].Offset & 0xFFFF));
 }
 
