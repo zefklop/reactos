@@ -544,6 +544,9 @@ LoadWindowsCore(IN USHORT OperatingSystemVersion,
 
     TRACE("HAL file = '%s' ; Kernel file = '%s'\n", HalFileName, KernelFileName);
 
+    /* HACK: Un-Reserve memory for loading the kernel */
+    MmMarkPagesInLookupTable(PageLookupTableAddress, MmGetPageNumberFromAddress((PVOID)0x00800000), 3000, LoaderFree);
+
     /* Load the Kernel */
     LoadModule(LoaderBlock, DirPath, KernelFileName, "ntoskrnl.exe", LoaderSystemCode, KernelDTE, 30);
 
