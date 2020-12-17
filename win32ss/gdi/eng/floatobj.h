@@ -21,6 +21,10 @@ LONG
 _FLOATOBJ_GetLong(FLOATOBJ *pf)
 {
     EFLOAT_S *pef = (EFLOAT_S*)pf;
+
+    if (pef->lExp >= 32)
+        return 0;
+
     return pef->lMant >> (32 - pef->lExp);
 }
 #define FLOATOBJ_GetLong _FLOATOBJ_GetLong
@@ -64,11 +68,15 @@ BOOL
 FLOATOBJ_IsLong(FLOATOBJ *pf)
 {
     EFLOAT_S *pef = (EFLOAT_S*)pf;
-    ULONG ulShift = pef->lExp;
-    if (ulShift < 32)
-        return ((pef->lMant << ulShift) == 0);
-    else
-        return (ulShift == 32);
+    ULONG BitIndex;
+
+    if (!_BitScanForward(&BitIndex, (ULONG)pef->lMant))
+    {
+        /* 0 is a long value :-) */
+        return TRUE;
+    }
+
+    return pef->lExp + BitIndex > 31;
 }
 
 FORCEINLINE
