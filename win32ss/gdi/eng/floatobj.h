@@ -22,7 +22,7 @@ _FLOATOBJ_GetLong(FLOATOBJ *pf)
 {
     EFLOAT_S *pef = (EFLOAT_S*)pf;
 
-    if (pef->lExp >= 32)
+    if (pef->lExp <= 0)
         return 0;
 
     return pef->lMant >> (32 - pef->lExp);
