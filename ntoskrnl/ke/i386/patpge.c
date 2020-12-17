@@ -143,7 +143,7 @@ Ki386IdentityMapMakeValid(PLARGE_IDENTITY_MAP IdentityMap,
     {
         /* Valid entry, just pass the page table address to the caller */
         if (PageTable)
-            *PageTable = (PHARDWARE_PTE)(Pde->PageFrameNumber << PAGE_SHIFT);
+            *PageTable = (PHARDWARE_PTE)((ULONG)Pde->PageFrameNumber << PAGE_SHIFT);
     }
 
     return TRUE;
@@ -186,7 +186,7 @@ Ki386ConvertPte(PHARDWARE_PTE Pte)
     PHYSICAL_ADDRESS PhysicalPtr;
 
     /* Get virtual and physical addresses */
-    VirtualPtr = (PVOID)(Pte->PageFrameNumber << PAGE_SHIFT);
+    VirtualPtr = (PVOID)((ULONG)Pte->PageFrameNumber << PAGE_SHIFT);
     PhysicalPtr = MmGetPhysicalAddress(VirtualPtr);
 
     /* Map its physical address in the page table provided by the caller */
