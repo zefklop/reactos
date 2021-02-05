@@ -1381,7 +1381,8 @@ NTAPI
 MmAccessFaultSectionView(
     PMMSUPPORT AddressSpace,
     MEMORY_AREA* MemoryArea,
-    PVOID Address
+    PVOID Address,
+    BOOLEAN Locked
 );
 
 VOID
