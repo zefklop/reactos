@@ -970,7 +970,8 @@ MiResolvePageFileFault(_In_ BOOLEAN StoreInstruction,
     }
 
     /* And we can insert this into the working set */
-    MiInsertInWorkingSetList(&CurrentProcess->Vm, FaultingAddress, Protection);
+    if ((CurrentProcess > HYDRA_PROCESS) && (PointerPte == MiAddressToPte(FaultingAddress)))
+        MiInsertInWorkingSetList(&CurrentProcess->Vm, FaultingAddress, Protection);
 
     return Status;
 }
@@ -1299,11 +1300,17 @@ MiResolveProtoPteFault(IN BOOLEAN StoreInstruction,
                                           &InPageBlock);
         ASSERT(NT_SUCCESS(Status));
     }
+    else if (TempPte.u.Soft.PageFileHigh != 0)
+    {
+        /* Shared section was paged out. */
+        Status = MiResolvePageFileFault(StoreInstruction,
+                                        Address,
+                                        PointerProtoPte,
+                                        Process,
+                                        &OldIrql);
+    }
     else
     {
-        /* We also don't support paged out pages */
-        ASSERT(TempPte.u.Soft.PageFileHigh == 0);
-
         /* Resolve the demand zero fault */
         Status = MiResolveDemandZeroFault(Address,
                                           PointerProtoPte,
