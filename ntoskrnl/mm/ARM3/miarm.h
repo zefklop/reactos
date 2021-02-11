@@ -1804,6 +1804,9 @@ MmArmInitSystem(
     IN PLOADER_PARAMETER_BLOCK LoaderBlock
 );
 
+NTSTATUS
+MiStartModifiedPageWriterThread(VOID);
+
 VOID
 NTAPI
 MiInitializeSessionSpaceLayout(VOID);
