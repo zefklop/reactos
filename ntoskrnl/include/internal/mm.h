@@ -1243,6 +1243,12 @@ BOOLEAN
 NTAPI
 MmIsPageAccessed(PEPROCESS Process, PVOID Address);
 
+/* pfnlist.c *****************************************************************/
+VOID
+MmCompletePageWrite(
+    _Inout_ PMDL Mdl,
+    _In_ NTSTATUS Status);
+
 /* wset.c ********************************************************************/
 
 NTSTATUS
