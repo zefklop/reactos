@@ -452,9 +452,11 @@ MiDeletePte(
         if (TempPte.u.Soft.PageFileHigh != 0)
         {
             /* Simply free the page file entry */
-            MiFreeSwapEntry(TempPte.u.Soft.PageFileLow, TempPte.u.Soft.PageFileLow);
+            MiFreeSwapEntry(TempPte.u.Soft.PageFileLow, TempPte.u.Soft.PageFileHigh);
 
             MI_ERASE_PTE(PointerPte);
+
+            return;
         }
     }
 
