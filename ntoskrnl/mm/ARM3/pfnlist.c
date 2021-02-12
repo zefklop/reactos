@@ -1439,6 +1439,9 @@ MmCompletePageWrite(
     if (!NT_SUCCESS(Status))
         Pfn->u3.e1.Modified = 1;
 
+    /* Dereference it now */
+    MiDereferencePfnAndDropLockCount(Pfn);
+
     /* Does someone use this page now ? */
     if (Pfn->u3.e1.PageLocation == ActiveAndValid)
     {
@@ -1512,12 +1515,15 @@ MiModifiedPageWriter(_Unreferenced_parameter_ PVOID Context)
                 if (!NT_SUCCESS(Status))
                 {
                     DPRINT1("No space left in swap file!\n");
+                    MiReleasePfnLock(OldIrql);
                     goto DoneForThisPage;
                 }
 
                 Pfn->OriginalPte.u.Soft.PageFileLow = PageFileLow;
                 Pfn->OriginalPte.u.Soft.PageFileHigh = PageFileHigh;
             }
+
+            MiReferenceUnusedPageAndBumpLockCount(Pfn);
 
             MiReleasePfnLock(OldIrql);
 
@@ -1535,6 +1541,8 @@ DoneForThisPage:
                 Pfn->u3.e1.Modified = 1;
 
                 OldIrql = MiAcquirePfnLock();
+
+                MiDereferencePfnAndDropLockCount(Pfn);
 
                 MiInsertPageInList(&MmModifiedPageListHead, Page);
 
