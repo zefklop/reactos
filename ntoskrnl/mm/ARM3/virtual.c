@@ -2352,6 +2352,8 @@ MiProtectVirtualMemory(IN PEPROCESS Process,
                 if ((NewAccessProtection & PAGE_NOACCESS) ||
                     (NewAccessProtection & PAGE_GUARD))
                 {
+                    DPRINT1("PTE %p will be in transition. Page %lx.\n", PointerPte, PFN_FROM_PTE(&PteContents));
+
                     KIRQL OldIrql = MiAcquirePfnLock();
 
                     /* Remove this from the working set */
@@ -4757,7 +4759,7 @@ NtAllocateVirtualMemory(IN HANDLE ProcessHandle,
         Vad->ControlArea = NULL; // For Memory-Area hack
 
         //
-        // Insert the VAD
+        // Insert the VAD. This will check for commitment limit, if needed.
         //
         Status = MiInsertVadEx(Vad,
                                &StartingAddress,
@@ -4958,32 +4960,63 @@ NtAllocateVirtualMemory(IN HANDLE ProcessHandle,
         KeAcquireGuardedMutexUnsafe(&MmSectionCommitMutex);
 
         //
-        // Get the segment template PTE and start looping each page
+        // Loop the pages to see what we must commit
         //
-        TempPte = FoundVad->ControlArea->Segment->SegmentPteTemplate;
-        ASSERT(TempPte.u.Long != 0);
         while (PointerPte <= LastPte)
         {
-            //
-            // For each non-already-committed page, write the invalid template PTE
-            //
-            if (PointerPte->u.Long == 0)
+            if (PointerPte->u.Long != 0)
             {
-                MI_WRITE_INVALID_PTE(PointerPte, TempPte);
-            }
-            else
-            {
+                /* This one is already committed */
                 QuotaFree++;
             }
             PointerPte++;
         }
 
         //
-        // Now do the commit accounting and release the lock
+        // Now do the commit accounting.
         //
         ASSERT(QuotaCharge >= QuotaFree);
         QuotaCharge -= QuotaFree;
-        FoundVad->ControlArea->Segment->NumberOfCommittedPages += QuotaCharge;
+
+        if (QuotaCharge)
+        {
+#if 0
+            KIRQL OldIrql = MiAcquirePfnLock();
+            if (MmTotalCommittedPages + QuotaCharge > MmTotalCommitLimit)
+            {
+                DPRINT1("Commitment limit exceeded ! Trying to charge %x, Number of committed pages: %lx, Commit limit %lx.\n",
+                    QuotaCharge, MmTotalCommittedPages, MmTotalCommitLimit);
+                Status = STATUS_COMMITMENT_LIMIT;
+                MiReleasePfnLock(OldIrql);
+                KeReleaseGuardedMutexUnsafe(&MmSectionCommitMutex);
+                goto FailPath;
+            }
+
+            /* So we get enough commitment space for this. Take this into the global count. */
+            MmTotalCommittedPages += QuotaCharge;
+            MiReleasePfnLock(OldIrql);
+#endif
+
+            /* Now we must commit for real */
+            FoundVad->ControlArea->Segment->NumberOfCommittedPages += QuotaCharge;
+            TempPte = FoundVad->ControlArea->Segment->SegmentPteTemplate;
+            ASSERT(TempPte.u.Long != 0);
+            PointerPte = MI_GET_PROTOTYPE_PTE_FOR_VPN(FoundVad, StartingAddress >> PAGE_SHIFT);
+            while (PointerPte <= LastPte)
+            {
+                //
+                // For each already committed page, write the invalid template PTE
+                //
+                if (PointerPte->u.Long == 0)
+                {
+                    ASSERT(QuotaCharge-- > 0);
+                    MI_WRITE_INVALID_PTE(PointerPte, TempPte);
+                }
+                PointerPte++;
+            }
+            ASSERT(QuotaCharge == 0);
+        }
+
         KeReleaseGuardedMutexUnsafe(&MmSectionCommitMutex);
 
         //
