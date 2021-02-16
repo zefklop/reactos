@@ -1266,6 +1266,9 @@ MmCompletePageWrite(
     _Inout_ PMDL Mdl,
     _In_ NTSTATUS Status);
 
+VOID
+MmWakeModifiedWriterThread(VOID);
+
 /* wset.c ********************************************************************/
 
 NTSTATUS

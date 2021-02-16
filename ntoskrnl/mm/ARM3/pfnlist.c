@@ -1537,6 +1537,12 @@ DoneForThisPage:
     }
 }
 
+VOID
+MmWakeModifiedWriterThread(VOID)
+{
+    KeSignalGateBoostPriority(&MiModifiedPageWriterGate);
+}
+
 CODE_SEG("INIT")
 NTSTATUS
 MiStartModifiedPageWriterThread(VOID)
