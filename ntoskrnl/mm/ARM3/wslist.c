@@ -30,15 +30,15 @@ MiGetFirstFreeWsleIndex(_Inout_ PMMSUPPORT Vm)
 
     /* Some sanity checks */
     ASSERT((WsList->FirstFree < WsList->LastEntry) || (WsList->FirstFree == MMWSLE_NEXT_FREE_INVALID));
-    ASSERT(WsList->LastEntry <= WsList->LastInitializedWsle);
 
     /* Check if we are initializing */
-    if (WsList->LastEntry == 0)
+    if (WsList->LastEntry == MAXULONG)
     {
         ASSERT(WsList->FirstDynamic < WsList->LastInitializedWsle);
         return WsList->FirstDynamic++;
     }
 
+    ASSERT(WsList->LastEntry <= WsList->LastInitializedWsle);
     /* See if our first free entry is valid */
     if (WsList->FirstFree == MMWSLE_NEXT_FREE_INVALID)
     {
@@ -50,7 +50,7 @@ MiGetFirstFreeWsleIndex(_Inout_ PMMSUPPORT Vm)
             MMPTE TempPte;
 
             MI_SET_USAGE(MI_USAGE_WSLE);
-            MI_SET_PROCESS(PsGetCurrentProcess());
+            MI_SET_WORKING_SET(Vm);
 
             /* We must be at page boundary */
             ASSERT(Address == ALIGN_DOWN_POINTER_BY(Address, PAGE_SIZE));
@@ -59,7 +59,7 @@ MiGetFirstFreeWsleIndex(_Inout_ PMMSUPPORT Vm)
 
             MiInitializePfn(PageFrameIndex, PointerPte, TRUE);
 
-            TempPte = ValidKernelPteLocal;
+            TempPte = Vm == &MmSystemCacheWs ? ValidKernelPte : ValidKernelPteLocal;
             TempPte.u.Hard.PageFrameNumber = PageFrameIndex;
             MI_WRITE_VALID_PTE(PointerPte, TempPte);
 
@@ -67,12 +67,6 @@ MiGetFirstFreeWsleIndex(_Inout_ PMMSUPPORT Vm)
 
             /* Make sure we are staying on the same page */
             ASSERT(Address == ALIGN_DOWN_POINTER_BY(&WsList->Wsle[WsList->LastInitializedWsle], PAGE_SIZE));
-
-            /* We must insert this page in our working set ! */
-            MiInsertInWorkingSetList(Vm, Address, MM_READWRITE);
-
-            /* Now the last entry is the tail of our WSLE array */
-            ASSERT(WsList->Wsle[WsList->LastEntry].u1.e1.VirtualPageNumber == ((ULONG_PTR)Address) >> PAGE_SHIFT);
         }
 
         /* At this point we must be good to go */
@@ -162,6 +156,7 @@ MiShrinkWorkingSet(_Inout_ PMMSUPPORT Vm)
 
     while(WsList->Wsle[LastValid].u1.e1.Valid == 0)
     {
+        ASSERT(LastValid != 0);
         LastValid--;
     }
 
@@ -196,19 +191,24 @@ MiShrinkWorkingSet(_Inout_ PMMSUPPORT Vm)
         return;
     }
 
-    /* See if we should shrink our array */
-    if (LastValid == WsList->LastInitializedWsle - (MMWSLE_PER_PAGE - 1))
+    /* See if we should shrink our array. */
+    while ((WsList->LastInitializedWsle > MMWSLE_PER_PAGE)
+        && (LastValid <= (WsList->LastInitializedWsle - MMWSLE_PER_PAGE)))
     {
-        PVOID WsleArrayQueue = ALIGN_DOWN_POINTER_BY(&WsList->Wsle[WsList->LastInitializedWsle], PAGE_SIZE);
-        PEPROCESS Process = MmGetAddressSpaceOwner(Vm);
+        PVOID WsleArrayQueue = &WsList->Wsle[WsList->LastInitializedWsle];
+        PMMPTE PointerPte = MiAddressToPte(WsleArrayQueue);
+        PFN_NUMBER Page = PFN_FROM_PTE(PointerPte);
+        PMMPFN Pfn = MiGetPfnEntry(Page);
 
-        ASSERT(WsList->Wsle[WsList->LastEntry].u1.e1.VirtualPageNumber == ((ULONG_PTR)WsleArrayQueue) >> PAGE_SHIFT);
+        MI_SET_PFN_DELETED(Pfn);
+        MiDecrementShareCount(MiGetPfnEntry(Pfn->u4.PteFrame), Pfn->u4.PteFrame);
+        MiDecrementShareCount(Pfn, Page);
 
-        /* Kernel address space not supported yet */
-        ASSERT(Process != NULL);
+        PointerPte->u.Long = 0;
 
-        /* Nuke the PTE. This will remove the virtual address from the working set */
-        MiDeletePte(MiAddressToPte(WsleArrayQueue), WsleArrayQueue, Process, NULL);
+        KeInvalidateTlbEntry(WsleArrayQueue);
+
+        WsList->LastInitializedWsle -= MMWSLE_PER_PAGE;
     }
 }
 
@@ -260,13 +260,10 @@ MiRemoveFromWorkingSetList(
     /* Nuke it */
     WsleEntry->u1.Long = 0;
 
-    /* Are we de-allocating the WSLE array ? */
-    if (WsIndex == (WsList->LastInitializedWsle - (MMWSLE_PER_PAGE - 1)))
-		WsList->LastInitializedWsle -= MMWSLE_PER_PAGE;
-
     /* Insert our entry into the free list */
     if (WsIndex == WsList->LastEntry)
     {
+        ASSERT(WsIndex != 0);
         /* Let's shrink the active list */
         WsList->LastEntry--;
         MiShrinkWorkingSet(Vm);
@@ -337,70 +334,59 @@ MiRemoveFromWorkingSetList(
     Vm->WorkingSetSize -= PAGE_SIZE;
 }
 
-_Requires_exclusive_lock_held_(CurrentProcess->Vm.WorkingSetMutex)
+_Requires_exclusive_lock_held_(WorkingSet->WorkingSetMutex)
 VOID
 NTAPI
-MiInitializeWorkingSetList(IN PEPROCESS CurrentProcess)
+MiInitializeWorkingSetList(IN PMMSUPPORT WorkingSet)
 {
-    PMMPFN Pfn1;
-    PMMPTE sysPte;
-    MMPTE tempPte;
-
     /* We start with the space left behind us */
-    MmWorkingSetList->Wsle = (PMMWSLE)(MmWorkingSetList + 1);
+    WorkingSet->VmWorkingSetList->Wsle = (PMMWSLE)(WorkingSet->VmWorkingSetList + 1);
     /* Which leaves us this much entries */
-    MmWorkingSetList->LastInitializedWsle = ((PAGE_SIZE - sizeof(MMWSL)) / sizeof(MMWSLE)) - 1;
+    WorkingSet->VmWorkingSetList->LastInitializedWsle = ((PAGE_SIZE - sizeof(MMWSL)) / sizeof(MMWSLE)) - 1;
 
     /* No entry in this list yet ! */
-    MmWorkingSetList->LastEntry = 0;
-    MmWorkingSetList->HashTable = NULL;
-    MmWorkingSetList->HashTableSize = 0;
-    MmWorkingSetList->NumberOfImageWaiters = 0;
-    MmWorkingSetList->VadBitMapHint = 0;
-    MmWorkingSetList->HashTableStart = NULL;
-    MmWorkingSetList->HighestPermittedHashAddress = NULL;
-    MmWorkingSetList->FirstFree = MMWSLE_NEXT_FREE_INVALID;
-    MmWorkingSetList->FirstDynamic = 0;
-    MmWorkingSetList->NextSlot = 0;
-
-    /* Map the process working set in kernel space */
-    /* FIXME: there should be no need */
-    sysPte = MiReserveSystemPtes(1, SystemPteSpace);
-    MI_MAKE_HARDWARE_PTE_KERNEL(&tempPte, sysPte, MM_READWRITE, CurrentProcess->WorkingSetPage);
-    MI_WRITE_VALID_PTE(sysPte, tempPte);
-    CurrentProcess->Vm.VmWorkingSetList = MiPteToAddress(sysPte);
+    WorkingSet->VmWorkingSetList->LastEntry = MAXULONG;
+    WorkingSet->VmWorkingSetList->HashTable = NULL;
+    WorkingSet->VmWorkingSetList->HashTableSize = 0;
+    WorkingSet->VmWorkingSetList->NumberOfImageWaiters = 0;
+    WorkingSet->VmWorkingSetList->VadBitMapHint = 0;
+    WorkingSet->VmWorkingSetList->HashTableStart = NULL;
+    WorkingSet->VmWorkingSetList->HighestPermittedHashAddress = NULL;
+    WorkingSet->VmWorkingSetList->FirstFree = MMWSLE_NEXT_FREE_INVALID;
+    WorkingSet->VmWorkingSetList->FirstDynamic = 0;
+    WorkingSet->VmWorkingSetList->NextSlot = 0;
 
     /* Insert the address we already know: our PDE base and the Working Set List */
+    if (MI_IS_PROCESS_WORKING_SET(WorkingSet))
+    {
 #if _MI_PAGING_LEVELS == 4
-    MiInsertInWorkingSetList(&CurrentProcess->Vm, (PVOID)PXE_BASE, 0);
+        MiInsertInWorkingSetList(WorkingSet, (PVOID)PXE_BASE, 0);
 #elif _MI_PAGING_LEVELS == 3
-    MiInsertInWorkingSetList(&CurrentProcess->Vm, (PVOID)PPE_BASE, 0);
+        MiInsertInWorkingSetList(WorkingSet, (PVOID)PPE_BASE, 0);
 #elif _MI_PAGING_LEVELS == 2
-    MiInsertInWorkingSetList(&CurrentProcess->Vm, (PVOID)PDE_BASE, 0);
+        MiInsertInWorkingSetList(WorkingSet, (PVOID)PDE_BASE, 0);
 #endif
 
 #if _MI_PAGING_LEVELS == 4
-    MiInsertInWorkingSetList(&CurrentProcess->Vm, MiAddressToPpe(MmWorkingSetList), 0);
+        MiInsertInWorkingSetList(WorkingSet, MiAddressToPpe(MmWorkingSetList), 0);
 #endif
 #if _MI_PAGING_LEVELS >= 3
-    MiInsertInWorkingSetList(&CurrentProcess->Vm, MiAddressToPde(MmWorkingSetList), 0);
+        MiInsertInWorkingSetList(WorkingSet, MiAddressToPde(MmWorkingSetList), 0);
 #endif
-    MiInsertInWorkingSetList(&CurrentProcess->Vm, MiAddressToPte(MmWorkingSetList), 0);
-    MiInsertInWorkingSetList(&CurrentProcess->Vm, MmWorkingSetList, 0);
-
-    /* The rule is that the owner process is always in the FLINK of the PDE's PFN entry */
-    Pfn1 = MiGetPfnEntry(CurrentProcess->Pcb.DirectoryTableBase[0] >> PAGE_SHIFT);
-    ASSERT(Pfn1->u4.PteFrame == MiGetPfnEntryIndex(Pfn1));
-    ASSERT(Pfn1->u1.WsIndex == 0);
-    Pfn1->u1.Event = (PKEVENT)CurrentProcess;
+        MiInsertInWorkingSetList(WorkingSet, MiAddressToPte(MmWorkingSetList), 0);
+        MiInsertInWorkingSetList(WorkingSet, MmWorkingSetList, 0);
+    }
+    else
+    {
+        MiInsertInWorkingSetList(WorkingSet, WorkingSet->VmWorkingSetList, 0);
+    }
 
     /* Mark this as not initializing anymore */
-    MmWorkingSetList->LastEntry = MmWorkingSetList->FirstDynamic - 1;
+    ASSERT(WorkingSet->VmWorkingSetList->FirstDynamic >= 1);
+    WorkingSet->VmWorkingSetList->LastEntry = WorkingSet->VmWorkingSetList->FirstDynamic - 1;
 
     /* We can add this to our list */
-    ExInterlockedInsertTailList(&MmWorkingSetExpansionHead,
-        &CurrentProcess->Vm.WorkingSetExpansionLinks,
-        &MmExpansionLock);
+    ExInterlockedInsertTailList(&MmWorkingSetExpansionHead, &WorkingSet->WorkingSetExpansionLinks, &MmExpansionLock);
 }
 
 static

@@ -499,6 +499,8 @@ MiInitMachineDependent(IN PLOADER_PARAMETER_BLOCK LoaderBlock)
     TempPde.u.Hard.PageFrameNumber = PageFrameIndex;
     MI_WRITE_VALID_PTE(StartPde, TempPde);
 
+    PsGetCurrentProcess()->Pcb.DirectoryTableBase[1] = PageFrameIndex << PAGE_SHIFT;
+
     /* Flush the TLB */
     KeFlushCurrentTb();
 
@@ -540,21 +542,6 @@ MiInitMachineDependent(IN PLOADER_PARAMETER_BLOCK LoaderBlock)
     Pfn1 = MiGetPfnEntry(PFN_FROM_PTE(MiAddressToPde(PDE_BASE)));
     Pfn1->u2.ShareCount = 0;
     Pfn1->u3.e2.ReferenceCount = 0;
-
-    /* Get a page for the working set list */
-    MI_SET_USAGE(MI_USAGE_PAGE_TABLE);
-    MI_SET_PROCESS2("Kernel WS List");
-    PageFrameIndex = MiRemoveAnyPage(0);
-    TempPte = ValidKernelPteLocal;
-    TempPte.u.Hard.PageFrameNumber = PageFrameIndex;
-
-    /* Map the working set list */
-    PointerPte = MiAddressToPte(MmWorkingSetList);
-    MI_WRITE_VALID_PTE(PointerPte, TempPte);
-
-    /* Zero it out, and save the frame index */
-    RtlZeroMemory(MiPteToAddress(PointerPte), PAGE_SIZE);
-    PsGetCurrentProcess()->WorkingSetPage = PageFrameIndex;
 
     /* Check for Pentium LOCK errata */
     if (KiI386PentiumLockErrataPresent)

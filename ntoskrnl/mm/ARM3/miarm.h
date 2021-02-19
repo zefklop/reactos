@@ -232,13 +232,6 @@ extern const ULONG MmProtectToValue[32];
 #define MM_NOIRQL (KIRQL)0xFFFFFFFF
 
 //
-// Returns the color of a page
-//
-#define MI_GET_PAGE_COLOR(x)                ((x) & MmSecondaryColorMask)
-#define MI_GET_NEXT_COLOR()                 (MI_GET_PAGE_COLOR(++MmSystemPageColor))
-#define MI_GET_NEXT_PROCESS_COLOR(x)        (MI_GET_PAGE_COLOR(++(x)->NextPageColor))
-
-//
 // Prototype PTEs that don't yet have a pagefile association
 //
 #ifdef _WIN64
@@ -666,6 +659,53 @@ extern PETHREAD MiExpansionLockOwner;
 
 FORCEINLINE
 BOOLEAN
+MI_IS_PROCESS_WORKING_SET(PMMSUPPORT WorkingSet)
+{
+    return (WorkingSet != &MmSystemCacheWs) && !WorkingSet->Flags.SessionSpace;
+}
+
+#if MI_TRACE_PFNS
+FORCEINLINE
+void
+MI_SET_WORKING_SET(PMMSUPPORT WorkingSet)
+{
+    if (MI_IS_PROCESS_WORKING_SET(WorkingSet))
+    {
+        MI_SET_PROCESS(CONTAINING_RECORD(WorkingSet, EPROCESS, Vm));
+        return;
+    }
+
+    if (WorkingSet->Flags.SessionSpace)
+    {
+        MI_SET_PROCESS2("Session Space");
+        return;
+    }
+
+    MI_SET_PROCESS2("Kernel Space");
+}
+#else
+#define MI_SET_WORKING_SET(x) NOTHING
+#endif
+
+//
+// Returns the color of a page
+//
+#define MI_GET_PAGE_COLOR(x)                ((x) & MmSecondaryColorMask)
+#define MI_GET_NEXT_COLOR()                 (MI_GET_PAGE_COLOR(++MmSystemPageColor))
+#define MI_GET_NEXT_PROCESS_COLOR(x)        (MI_GET_PAGE_COLOR(++(x)->NextPageColor))
+
+FORCEINLINE
+ULONG
+MI_GET_NEXT_WORKING_SET_COLOR(PMMSUPPORT WorkingSet)
+{
+    if (!MI_IS_PROCESS_WORKING_SET(WorkingSet))
+        return MI_GET_NEXT_COLOR();
+
+    return MI_GET_NEXT_PROCESS_COLOR(CONTAINING_RECORD(WorkingSet, EPROCESS, Vm));
+}
+
+FORCEINLINE
+BOOLEAN
 MiIsMemoryTypeFree(TYPE_OF_MEMORY MemoryType)
 {
     return ((MemoryType == LoaderFree) ||
@@ -1077,7 +1117,7 @@ MiRemoveFromWorkingSetList(_Inout_ PMMSUPPORT Vm, _In_ PVOID Address);
 _Requires_exclusive_lock_held_(CurrentProcess->Vm.WorkingSetMutex)
 VOID
 NTAPI
-MiInitializeWorkingSetList(IN PEPROCESS CurrentProcess);
+MiInitializeWorkingSetList(_In_ PMMSUPPORT WorkingSetList);
 
 //
 // New ARM3<->RosMM PAGE Architecture
@@ -2304,14 +2344,14 @@ MiDeleteVirtualAddresses(
     IN PMMVAD Vad
 );
 
-_Requires_exclusive_lock_held_(CurrentProcess->Vm.WorkingSetMutex)
+_Requires_exclusive_lock_held_(WorkingSet->WorkingSetMutex)
 _IRQL_requires_(DISPATCH_LEVEL)
 VOID
 NTAPI
 MiDeletePte(
 	_Inout_ PMMPTE PointerPte,
 	_In_ PVOID VirtualAddress,
-	_In_ PEPROCESS CurrentProcess,
+	_In_ PMMSUPPORT WorkingSet,
 	_In_ PMMPTE PrototypePte);
 
 ULONG
