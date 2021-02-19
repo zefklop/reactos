@@ -188,17 +188,6 @@ ProtectToPTE(ULONG flProtect)
 
 NTSTATUS
 NTAPI
-MiDispatchFault(IN ULONG FaultCode,
-                IN PVOID Address,
-                IN PMMPTE PointerPte,
-                IN PMMPTE PointerProtoPte,
-                IN BOOLEAN Recursive,
-                IN PEPROCESS Process,
-                IN PVOID TrapInformation,
-                IN PVOID Vad);
-
-NTSTATUS
-NTAPI
 MiFillSystemPageDirectory(IN PVOID Base,
                           IN SIZE_T NumberOfBytes);
 
@@ -244,38 +233,17 @@ MmGetPageTableForProcess(PEPROCESS Process, PVOID Address, BOOLEAN Create, PKIRQ
             }
             return Pt + MiAddressToPteOffset(Address);
         }
+
         /* This is for our process */
         PointerPde = MiAddressToPde(Address);
         Pt = (PULONG)MiAddressToPte(Address);
-        if (PointerPde->u.Hard.Valid == 0)
+
+        if ((PointerPde->u.Hard.Valid == 0) && (Create == FALSE))
         {
-            NTSTATUS Status;
-            if (Create == FALSE)
-            {
-                return NULL;
-            }
-            ASSERT(PointerPde->u.Long == 0);
-
-            MI_WRITE_INVALID_PTE(PointerPde, DemandZeroPde);
-            // Tiny HACK: Parameter 1 is the architecture specific FaultCode for an access violation (i.e. page is present)
-
-            /* Lock the working set, as this will add this address to it */
-            MiLockProcessWorkingSetUnsafe(Process, PsGetCurrentThread());
-
-            Status = MiDispatchFault(0x1,
-                                     Pt,
-                                     PointerPde,
-                                     NULL,
-                                     FALSE,
-                                     PsGetCurrentProcess(),
-                                     NULL,
-                                     NULL);
-            DBG_UNREFERENCED_LOCAL_VARIABLE(Status);
-            ASSERT(KeAreAllApcsDisabled() == TRUE);
-            ASSERT(PointerPde->u.Hard.Valid == 1);
-
-            MiUnlockProcessWorkingSetUnsafe(Process, PsGetCurrentThread());
+            /* Do not fault PDE in if not needed */
+            return NULL;
         }
+
         return (PULONG)MiAddressToPte(Address);
     }
 
