@@ -2352,7 +2352,7 @@ MiProtectVirtualMemory(IN PEPROCESS Process,
                 if ((NewAccessProtection & PAGE_NOACCESS) ||
                     (NewAccessProtection & PAGE_GUARD))
                 {
-                    DPRINT1("PTE %p will be in transition. Page %lx.\n", PointerPte, PFN_FROM_PTE(&PteContents));
+                    DPRINT("PTE %p will be in transition. Page %lx.\n", PointerPte, PFN_FROM_PTE(&PteContents));
 
                     KIRQL OldIrql = MiAcquirePfnLock();
 
