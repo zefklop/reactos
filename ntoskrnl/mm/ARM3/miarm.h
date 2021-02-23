@@ -1485,6 +1485,45 @@ MiUnlockWorkingSetShared(IN PETHREAD Thread,
 
 FORCEINLINE
 VOID
+MiConvertSharedWorkingSetLockToExclusive(
+    _In_ PETHREAD Thread,
+    _In_ PMMSUPPORT Vm)
+{
+    /* Sanity check: No exclusive lock. */
+    ASSERT(!Thread->OwnsProcessWorkingSetExclusive);
+    ASSERT(!Thread->OwnsSessionWorkingSetExclusive);
+    ASSERT(!Thread->OwnsSystemWorkingSetExclusive);
+
+    /* And it should have one and only one shared lock */
+    ASSERT((Thread->OwnsProcessWorkingSetShared + Thread->OwnsSessionWorkingSetShared + Thread->OwnsSystemWorkingSetShared) == 1);
+
+    /* This must succeed. So loop */
+    while (!ExConvertPushLockSharedToExclusive(&Vm->WorkingSetMutex))
+        YieldProcessor();
+
+    if (Vm == &MmSystemCacheWs)
+    {
+        ASSERT(Thread->OwnsSystemWorkingSetShared);
+        Thread->OwnsSystemWorkingSetShared = FALSE;
+        Thread->OwnsSystemWorkingSetExclusive = TRUE;
+        return;
+    }
+
+    if (Vm->Flags.SessionSpace)
+    {
+        ASSERT(Thread->OwnsSessionWorkingSetShared);
+        Thread->OwnsSessionWorkingSetShared = FALSE;
+        Thread->OwnsSessionWorkingSetExclusive = TRUE;
+        return;
+    }
+
+    ASSERT(Thread->OwnsProcessWorkingSetShared);
+    Thread->OwnsProcessWorkingSetShared = FALSE;
+    Thread->OwnsProcessWorkingSetExclusive = TRUE;
+}
+
+FORCEINLINE
+VOID
 MiUnlockProcessWorkingSetForFault(IN PEPROCESS Process,
                                   IN PETHREAD Thread,
                                   OUT PBOOLEAN Safe,
