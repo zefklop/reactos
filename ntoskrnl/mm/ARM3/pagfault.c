@@ -965,6 +965,7 @@ MiResolvePageFileFault(_In_ BOOLEAN StoreInstruction,
     {
         /* Tell them we're done */
         KeSetEvent(Pfn1->u1.Event, IO_NO_INCREMENT, FALSE);
+        Pfn1->u1.Event = NULL;
     }
 
     /* And we can insert this into the working set */
@@ -1602,6 +1603,8 @@ MiDispatchFault(
 
         if (InPageBlock != NULL)
         {
+            MiUnlockWorkingSet(PsGetCurrentThread(), WorkingSet);
+
             KeWaitForSingleObject(&CurrentPageEvent, WrPageIn, KernelMode, FALSE, NULL);
 
             /* Let's the chain go on */
@@ -1609,6 +1612,8 @@ MiDispatchFault(
             {
                 KeSetEvent(PreviousPageEvent, IO_NO_INCREMENT, FALSE);
             }
+
+            MiLockWorkingSet(PsGetCurrentThread(), WorkingSet);
         }
 
         ASSERT(OldIrql == KeGetCurrentIrql());
