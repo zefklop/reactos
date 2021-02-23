@@ -955,7 +955,16 @@ FORCEINLINE
 KIRQL
 MiAcquirePfnLock(VOID)
 {
+#if MI_TRACE_PFNS
+    KIRQL ret = KeAcquireQueuedSpinLock(LockQueuePfnLock);
+
+    MI_SET_USAGE(MI_USAGE_NOT_SET);
+    MI_SET_PROCESS2("Not set");
+
+    return ret;
+#else
     return KeAcquireQueuedSpinLock(LockQueuePfnLock);
+#endif
 }
 
 FORCEINLINE
@@ -970,11 +979,12 @@ FORCEINLINE
 VOID
 MiAcquirePfnLockAtDpcLevel(VOID)
 {
-    PKSPIN_LOCK_QUEUE LockQueue;
-
     ASSERT(KeGetCurrentIrql() >= DISPATCH_LEVEL);
-    LockQueue = &KeGetCurrentPrcb()->LockQueue[LockQueuePfnLock];
-    KeAcquireQueuedSpinLockAtDpcLevel(LockQueue);
+    KeAcquireQueuedSpinLockAtDpcLevel(&KeGetCurrentPrcb()->LockQueue[LockQueuePfnLock]);
+#if MI_TRACE_PFNS
+    MI_SET_USAGE(MI_USAGE_NOT_SET);
+    MI_SET_PROCESS2("Not set");
+#endif
 }
 
 FORCEINLINE
