@@ -393,20 +393,13 @@ static
 VOID
 MiTrimWorkingSet(PMMSUPPORT Vm)
 {
-    PEPROCESS Process = NULL;
-    KAPC_STATE ApcState;
     ULONG i;
     PMMWSL WsList;
 
-    /* Attach to the process */
-    if ((Vm != &MmSystemCacheWs) && !Vm->Flags.SessionSpace)
-    {
-        Process = CONTAINING_RECORD(Vm, EPROCESS, Vm);
-        KeStackAttachProcess(&Process->Pcb, &ApcState);
-    }
+    /* This should be done under WS lock */
+    ASSERT(MM_ANY_WS_LOCK_HELD(PsGetCurrentThread()));
 
-    /* Lock the WS. */
-    MiLockWorkingSet(PsGetCurrentThread(), Vm);
+    /* Mark this as being trimmed */
     Vm->Flags.BeingTrimmed = 1;
 
     /* Walk the WsList */
@@ -442,8 +435,9 @@ MiTrimWorkingSet(PMMSUPPORT Vm)
             continue;
         }
 
-        /* If the entry is not so old, just age it */
-        if (Entry->u1.e1.Age < 3)
+        /* If the entry is not so old, just age it
+         * We make it older if we must trim hard. */
+        if ((Entry->u1.e1.Age + Vm->Flags.TrimHard) < 3)
         {
             Entry->u1.e1.Age++;
             continue;
@@ -492,15 +486,20 @@ MiTrimWorkingSet(PMMSUPPORT Vm)
         /* Drop the share count. This will take care of putting it in the standby or modified list. */
         MiDecrementShareCount(Pfn1, Page);
 
+        /* Are we done yet ? Let's see */
+        if ((MmAvailablePages > MmMinimumFreePages) &&
+            (MmAvailablePages + MmModifiedPageListHead.Total) > MmPlentyFreePages)
+        {
+            /* Yes ! */
+            MiReleasePfnLock(OldIrql);
+            break;
+        }
+
         MiReleasePfnLock(OldIrql);
     }
 
     /* We're done */
     Vm->Flags.BeingTrimmed = 0;
-    MiUnlockWorkingSet(PsGetCurrentThread(), Vm);
-
-    if (Process)
-        KeUnstackDetachProcess(&ApcState);
 }
 
 VOID
@@ -508,33 +507,82 @@ NTAPI
 MmWorkingSetManager(VOID)
 {
     PLIST_ENTRY VmListEntry;
-    KIRQL OldIrql;
     PMMSUPPORT Vm = NULL;
+    KIRQL OldIrql;
 
     OldIrql = MiAcquireExpansionLock();
+
     for (VmListEntry = MmWorkingSetExpansionHead.Flink;
-        VmListEntry != &MmWorkingSetExpansionHead;
-        VmListEntry = VmListEntry->Flink)
+         VmListEntry != &MmWorkingSetExpansionHead;
+         VmListEntry = VmListEntry->Flink)
     {
+        BOOLEAN TrimHard = MmAvailablePages < MmMinimumFreePages;
+        PEPROCESS Process = NULL;
+
+        /* Don't do anything if we have plenty of free pages. */
+        if ((MmAvailablePages + MmModifiedPageListHead.Total) >= MmPlentyFreePages)
+            break;
+
         Vm = CONTAINING_RECORD(VmListEntry, MMSUPPORT, WorkingSetExpansionLinks);
 
-        if (Vm->Flags.SessionSpace || Vm == &MmSystemCacheWs)
+        /* Let the legacy Mm System space alone */
+        if (Vm == MmGetKernelAddressSpace())
+            continue;
+
+        if (MI_IS_PROCESS_WORKING_SET(Vm))
         {
-            /* FIXME: Unsupported. */
+            Process = CONTAINING_RECORD(Vm, EPROCESS, Vm);
+
+            /* Make sure the process is not terminating abd attach to it */
+            if (!ExAcquireRundownProtection(&Process->RundownProtect))
+                continue;
+            ASSERT(!KeIsAttachedProcess());
+            KeAttachProcess(&Process->Pcb);
+        }
+        else
+        {
+            /* FIXME: Session & system space unsupported */
             continue;
         }
 
-        /* Remove it from the list */
-        /* FIXME: LRU method is LAME. Implement heuristic to prioritize trimming */
-        /* FIXME: One WS at a time is SUPER-LAME */
-        RemoveEntryList(&Vm->WorkingSetExpansionLinks);
-        InsertTailList(&MmWorkingSetExpansionHead, &Vm->WorkingSetExpansionLinks);
-        break;
+        MiReleaseExpansionLock(OldIrql);
+
+        /* Share-lock for now, we're only reading */
+        MiLockWorkingSetShared(PsGetCurrentThread(), Vm);
+
+        if ((Vm->WorkingSetSize > Vm->MaximumWorkingSetSize) ||
+            (TrimHard && (Vm->WorkingSetSize > Vm->MinimumWorkingSetSize)))
+        {
+            MiConvertSharedWorkingSetLockToExclusive(PsGetCurrentThread(), Vm);
+
+            /* Tell the trimmer we're in dire need */
+            if (TrimHard)
+                Vm->Flags.TrimHard = 1;
+
+            MiTrimWorkingSet(Vm);
+
+            /* Reset this flag */
+            Vm->Flags.TrimHard = 0;
+
+            MiUnlockWorkingSet(PsGetCurrentThread(), Vm);
+        }
+        else
+        {
+            MiUnlockWorkingSetShared(PsGetCurrentThread(), Vm);
+        }
+
+        /* Lock again */
+        OldIrql = MiAcquireExpansionLock();
+
+        if (Process)
+        {
+            KeDetachProcess();
+            ExReleaseRundownProtection(&Process->RundownProtect);
+        }
     }
+
     MiReleaseExpansionLock(OldIrql);
 
-    if (Vm)
-    {
-        MiTrimWorkingSet(Vm);
-    }
+    /* Now make sure that the pages get to the page file and that we didn't trim for nothing */
+    MiModifiedPageWrite(FALSE);
 }
