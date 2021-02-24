@@ -289,7 +289,7 @@ function(set_module_type_toolchain MODULE TYPE)
         add_linker_script(${MODULE} ${REACTOS_SOURCE_DIR}/sdk/cmake/init-section.lds)
         # Fixup section characteristiscs
         add_custom_command(TARGET ${MODULE} POST_BUILD
-            COMMAND native-pefixup --driver $<TARGET_FILE:${MODULE}>)
+            COMMAND native-pefixup --${TYPE} $<TARGET_FILE:${MODULE}>)
         # Believe it or not, cmake doesn't do that
         set_property(TARGET ${MODULE} APPEND PROPERTY LINK_DEPENDS $<TARGET_PROPERTY:native-pefixup,IMPORTED_LOCATION>)
     endif()
