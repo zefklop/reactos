@@ -25,7 +25,10 @@ static const char* g_ApplicationName;
 static const char* g_Target;
 
 #define MODE_LOADCONFIG 0
-#define MODE_DRIVER 1
+#define MODE_KERNELDRIVER 1
+#define MODE_WDMDRIVER 2
+#define MODE_KERNELDLL 3
+#define MODE_KERNEL 4
 
 void *rva_to_ptr(unsigned char *buffer, PIMAGE_NT_HEADERS nt_header, DWORD rva)
 {
@@ -124,7 +127,7 @@ static int add_loadconfig(unsigned char *buffer, PIMAGE_NT_HEADERS nt_header)
     return 1;
 }
 
-static int driver_fixup(unsigned char *buffer, PIMAGE_NT_HEADERS nt_header)
+static int driver_fixup(int mode, unsigned char *buffer, PIMAGE_NT_HEADERS nt_header)
 {
     /* GNU LD just doesn't know what a driver is, and has notably no idea of paged vs non-paged sections */
     for (unsigned i = 0; i < nt_header->FileHeader.NumberOfSections; i++)
@@ -132,7 +135,9 @@ static int driver_fixup(unsigned char *buffer, PIMAGE_NT_HEADERS nt_header)
         PIMAGE_SECTION_HEADER Section = IMAGE_FIRST_SECTION(nt_header) + i;
 
         /* Known sections which can be discarded */
-        if (strncasecmp((char*)Section->Name, "INIT", 4) == 0)
+        if ((strncasecmp((char*)Section->Name, "INIT", 4) == 0)
+            /* Bugcheck code needs this, so don't discard it for kernels */
+            || ((strncasecmp((char*)Section->Name, ".rsrc", 4) == 0) && (mode != MODE_KERNEL)))
         {
             Section->Characteristics |= IMAGE_SCN_MEM_DISCARDABLE;
             continue;
@@ -161,8 +166,11 @@ print_usage(void)
 {
     printf("Usage: %s <mode> <filename>\n", g_ApplicationName);
     printf("Where <mode> is on of the following:\n");
-    printf("  --loadconfig: Fix the LOAD_CONFIG directory entry\n");
-    printf("  --driver:     Fix code and data sections for driver images\n");
+    printf("  --loadconfig:         Fix the LOAD_CONFIG directory entry\n");
+    printf("  --kernelmodedriver:   Fix code and data sections for driver images\n");
+    printf("  --wdmdriver:          Fix code and data sections for WDM drivers\n");
+    printf("  --kerneldll:          Fix code and data sections for Kernel-Mode DLLs\n");
+    printf("  --kernel:             Fix code and data sections for kernels\n");
 }
 
 int main(int argc, char **argv)
@@ -186,9 +194,21 @@ int main(int argc, char **argv)
     {
         mode = MODE_LOADCONFIG;
     }
-    else if (strcmp(argv[1], "--driver") == 0)
+    else if (strcmp(argv[1], "--kernelmodedriver") == 0)
     {
-        mode = MODE_DRIVER;
+        mode = MODE_KERNELDRIVER;
+    }
+    else if (strcmp(argv[1], "--wdmdriver") == 0)
+    {
+        mode = MODE_WDMDRIVER;
+    }
+    else if (strcmp(argv[1], "--kerneldll") == 0)
+    {
+        mode = MODE_KERNELDLL;
+    }
+    else if (strcmp(argv[1], "--kernel") == 0)
+    {
+        mode = MODE_KERNEL;
     }
     else
     {
@@ -242,7 +262,7 @@ int main(int argc, char **argv)
             if (mode == MODE_LOADCONFIG)
                 result = add_loadconfig(buffer, nt_header);
             else
-                result = driver_fixup(buffer, nt_header);
+                result = driver_fixup(mode, buffer, nt_header);
 
             if (!result)
             {
