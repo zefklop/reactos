@@ -1510,9 +1510,8 @@ MiFindInitializationCode(OUT PVOID *StartVa,
             /* Assume failure */
             InitFound = FALSE;
 
-            /* Is this the INIT section or a discardable section? */
-            if ((strncmp((PCCH)Section->Name, "INIT", 5) == 0) ||
-                ((Section->Characteristics & IMAGE_SCN_MEM_DISCARDABLE)))
+            /* Is this a discardable section? */
+            if (Section->Characteristics & IMAGE_SCN_MEM_DISCARDABLE)
             {
                 /* Remember this */
                 InitFound = TRUE;
