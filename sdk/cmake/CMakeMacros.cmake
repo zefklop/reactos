@@ -910,3 +910,10 @@ function(set_target_cpp_properties _target)
         set_target_properties(${_target} PROPERTIES WITH_CXX_RTTI TRUE)
     endif()
 endfunction()
+
+function(declare_crt_library _target)
+    # See this for an explanation
+    # https://cmake.org/cmake/help/v3.19/manual/cmake-buildsystem.7.html#id24
+    set_property(TARGET ${_target} PROPERTY INTERFACE_CRT_LIBRARY ${_target})
+    set_property(TARGET ${_target} APPEND PROPERTY COMPATIBLE_INTERFACE_STRING CRT_LIBRARY)
+endfunction()

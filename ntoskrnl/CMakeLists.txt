@@ -10,6 +10,7 @@ set(NTKRNLMP_SOURCE ${SOURCE})
 set(NTKRNLMP_ASM_SOURCE ${ASM_SOURCE})
 
 spec2def(ntoskrnl.exe ntoskrnl.spec ADD_IMPORTLIB)
+declare_crt_library(libntoskrnl)
 
 # Embed RTC libs
 if (STACK_PROTECTOR)

@@ -5,6 +5,7 @@ spec2def(ntdll.dll def/ntdll.spec ADD_IMPORTLIB)
 
 # add a specific import lib for CRT functions
 generate_import_lib(ntdll_crt ntdll.dll def/ntdll_crt.spec)
+declare_crt_library(ntdll_crt)
 
 # Embed RTC libs
 if (STACK_PROTECTOR)

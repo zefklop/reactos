@@ -249,3 +249,4 @@ target_compile_definitions(libcntpr
     __CRT__NO_INLINE
     CRTDLL)
 add_dependencies(libcntpr psdk asm)
+declare_crt_library(libcntpr)
