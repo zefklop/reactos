@@ -163,6 +163,19 @@ else()
 The type of this module.
 One of "nativecui", "nativedll", "kernelmodedriver", "wdmdriver", "kerneldll", "win32cui", "win32gui", "win32dll", "win32ocx", "cpl" or "module"]])
 
+    # The CRT used by a library. (ntdll, libcntpr, ntoskrnl, msvcrt)
+    # They can't be mixed.
+    # For instance, a module linked to a static library linked to msvcrt cannot be linked to libcntpr
+    # If that's too much linking for your liking, here is a drawing of what is not possible.
+    # libcntpr <- MODULE -> libA -> msvcrt
+    define_property(TARGET PROPERTY CRT_LIBRARY
+        BRIEF_DOCS "The CRT library used by the target"
+        FULL_DOCS [[
+The CRT library used by the target.
+This is automatically set when you link to the relevant library (libmsvcrt, libcntpr, etc.).
+You can't mix CRT libraries in the same module.
+]])
+
     # C++
     define_property(TARGET PROPERTY WITH_CXX_EXCEPTIONS
         BRIEF_DOCS "Enable C++ exceptions on this target"
