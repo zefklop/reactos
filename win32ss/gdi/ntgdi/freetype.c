@@ -503,6 +503,24 @@ VOID DumpFontInfo(BOOL bDoLock)
 }
 #endif
 
+/* ntoskrnl doesn't provide _wtoi... */
+static
+int
+IntFromWStr(PCWSTR str)
+{
+    int ret = 0;
+    while (*str == '0') str++;
+
+    while (*str)
+    {
+        if (!isdigit(*str))
+            return ret;
+        ret *= 10;
+        ret += *str++ - '0';
+    }
+    return ret;
+}
+
 /*
  * IntLoadFontSubstList --- loads the list of font substitutes
  */
@@ -574,7 +592,7 @@ IntLoadFontSubstList(PLIST_ENTRY pHead)
         }
 
         /* query value */
-        Status = ZwQueryValueKey(KeyHandle, &FromW, KeyValueFullInformation, 
+        Status = ZwQueryValueKey(KeyHandle, &FromW, KeyValueFullInformation,
                                  InfoBuffer, sizeof(InfoBuffer), &Length);
         pInfo = (PKEY_VALUE_FULL_INFORMATION)InfoBuffer;
         if (!NT_SUCCESS(Status) || !pInfo->DataLength)
@@ -606,7 +624,7 @@ IntLoadFontSubstList(PLIST_ENTRY pHead)
             *pch = UNICODE_NULL;
             FromW.Length = (pch - FromW.Buffer) * sizeof(WCHAR);
             /* parse charset number */
-            CharSets[FONTSUBST_FROM] = (BYTE)_wtoi(pch + 1);
+            CharSets[FONTSUBST_FROM] = (BYTE)IntFromWStr(pch + 1);
         }
 
         /* does charset exist? (to) */
@@ -618,7 +636,7 @@ IntLoadFontSubstList(PLIST_ENTRY pHead)
             *pch = UNICODE_NULL;
             ToW.Length = (pch - ToW.Buffer) * sizeof(WCHAR);
             /* parse charset number */
-            CharSets[FONTSUBST_TO] = (BYTE)_wtoi(pch + 1);
+            CharSets[FONTSUBST_TO] = (BYTE)IntFromWStr(pch + 1);
         }
 
         /* is it identical? */
@@ -1756,7 +1774,7 @@ IntLoadFontsInRegistry(VOID)
         }
 
         /* query value */
-        Status = ZwQueryValueKey(KeyHandle, &FontTitleW, KeyValueFullInformation, 
+        Status = ZwQueryValueKey(KeyHandle, &FontTitleW, KeyValueFullInformation,
                                  InfoBuffer, InfoSize, &Length);
         if (Status == STATUS_BUFFER_OVERFLOW || Status == STATUS_BUFFER_TOO_SMALL)
         {
@@ -1770,7 +1788,7 @@ IntLoadFontsInRegistry(VOID)
                 break;
             }
             /* try again */
-            Status = ZwQueryValueKey(KeyHandle, &FontTitleW, KeyValueFullInformation, 
+            Status = ZwQueryValueKey(KeyHandle, &FontTitleW, KeyValueFullInformation,
                                      InfoBuffer, InfoSize, &Length);
         }
         pInfo = (PKEY_VALUE_FULL_INFORMATION)InfoBuffer;
@@ -4944,7 +4962,7 @@ GetFontPenalty(const LOGFONTW *               LogFont,
     if (Long != TM->tmWeight)
     {
         /* Weight Penalty 3 */
-        /* The candidate's weight does not match the requested weight. 
+        /* The candidate's weight does not match the requested weight.
            Penalty * (weight difference/10) */
         GOT_PENALTY("Weight", 3 * (labs(Long - TM->tmWeight) / 10));
     }
@@ -6293,7 +6311,7 @@ IntExtTextOutW(
                     FLOATOBJ_Set1(&Scale);
 
                 /* do the shift before multiplying to preserve precision */
-                FLOATOBJ_MulLong(&Scale, Dx[i<<DxShift] << 6); 
+                FLOATOBJ_MulLong(&Scale, Dx[i<<DxShift] << 6);
                 TextLeft += FLOATOBJ_GetLong(&Scale);
                 DPRINT("New TextLeft2: %I64d\n", TextLeft);
             }
@@ -6557,7 +6575,7 @@ IntExtTextOutW(
                 FLOATOBJ_Set1(&Scale);
 
             /* do the shift before multiplying to preserve precision */
-            FLOATOBJ_MulLong(&Scale, Dx[i<<DxShift] << 6); 
+            FLOATOBJ_MulLong(&Scale, Dx[i<<DxShift] << 6);
             TextLeft += FLOATOBJ_GetLong(&Scale);
             DPRINT("New TextLeft2: %I64d\n", TextLeft);
         }
