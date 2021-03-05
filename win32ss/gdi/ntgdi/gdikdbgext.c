@@ -47,16 +47,35 @@ static
 BOOL
 KdbGetHexNumber(char *pszNum, ULONG_PTR *pulValue)
 {
-    char *endptr;
-
     /* Skip optional '0x' prefix */
     if ((pszNum[0] == '0') && ((pszNum[1] == 'x') || (pszNum[1] == 'X')))
         pszNum += 2;
 
     /* Make a number from the string (hex) */
-    *pulValue = strtoul(pszNum, &endptr, 16);
+    if (!*pszNum)
+        return FALSE;
 
-    return (*endptr == '\0');
+    *pulValue = 0;
+    /* Skip leading zeros */
+    while (*pszNum == '0')
+        pszNum++;
+
+    while (*pszNum)
+    {
+        BYTE CharVal;
+        if (!isxdigit(*pszNum))
+            return FALSE;
+
+        if (isdigit(*pszNum))
+            CharVal = *pszNum - '0';
+        else
+            CharVal = tolower(*pszNum) - 'a';
+        *pulValue = (*pulValue << 4) | CharVal;
+
+        *pszNum++;
+    }
+
+    return TRUE;
 }
 
 static
