@@ -641,10 +641,29 @@ QueryEnvironmentVariable(PUNICODE_STRING Name,
    return(STATUS_VARIABLE_NOT_FOUND);
 }
 
-static int __cdecl
-DbgCompareChannels(const void * a, const void * b)
+static
+DBG_CHANNEL*
+FindChannelEntry(WCHAR* name)
 {
-    return wcscmp((WCHAR*)a, ((DBG_CHANNEL*)b)->Name);
+    DBG_CHANNEL *base = &DbgChannels[0];
+    size_t lim;
+    int cmpval;
+    DBG_CHANNEL *p;
+
+    for (lim = ARRAYSIZE(DbgChannels); lim != 0; lim >>= 1)
+    {
+        p = base + (lim >> 1);
+        cmpval = wcscmp(name, p->Name);
+        if (cmpval == 0)
+            return p;
+        if (cmpval > 0)
+        {
+            /* key > p: move right */
+            base = p + 1;
+            lim--;
+        } /* else move left */
+    }
+    return NULL;
 }
 
 static BOOL
@@ -663,11 +682,7 @@ DbgAddDebugChannel(PPROCESSINFO ppi, WCHAR* channel, WCHAR* level, WCHAR op)
         return TRUE;
     }
 
-    ChannelEntry = (DBG_CHANNEL*)bsearch(channel,
-                                         DbgChannels,
-                                         DbgChCount,
-                                         sizeof(DBG_CHANNEL),
-                                         DbgCompareChannels);
+    ChannelEntry = FindChannelEntry(channel);
     if(ChannelEntry == NULL)
     {
         return FALSE;
