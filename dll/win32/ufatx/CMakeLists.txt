@@ -8,6 +8,6 @@ list(APPEND SOURCE
 
 add_library(ufatx MODULE ${SOURCE})
 set_module_type(ufatx nativedll)
-target_link_libraries(ufatx vfatxlib)
+target_link_libraries(ufatx vfatxlib ntdll_crt)
 add_importlibs(ufatx ntdll)
 add_cd_file(TARGET ufatx DESTINATION reactos/system32 FOR all)

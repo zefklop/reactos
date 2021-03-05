@@ -10,7 +10,7 @@ list(APPEND SOURCE
 
 add_library(msv1_0 MODULE ${SOURCE} msv1_0.rc)
 set_module_type(msv1_0 win32dll UNICODE ENTRYPOINT 0)
-target_link_libraries(msv1_0 wine ${PSEH_LIB})
+target_link_libraries(msv1_0 wine ntdll_crt ${PSEH_LIB})
 add_delay_importlibs(msv1_0 samsrv lsasrv)
 add_importlibs(msv1_0 advapi32 kernel32 ntdll)
 add_dependencies(msv1_0 psdk)

@@ -8,6 +8,6 @@ list(APPEND SOURCE
 
 add_library(uext2 MODULE ${SOURCE})
 set_module_type(uext2 nativedll)
-target_link_libraries(uext2 ext2lib)
+target_link_libraries(uext2 ext2lib ntdll_crt)
 add_importlibs(uext2 ntdll)
 add_cd_file(TARGET uext2 DESTINATION reactos/system32 FOR all)

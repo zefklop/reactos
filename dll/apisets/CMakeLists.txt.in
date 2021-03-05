@@ -31,6 +31,9 @@ function (add_apiset apiset_name baseaddress)
     endif()
 
     add_importlibs(${apiset_name} ${ARGN} ntdll)
+    if (NOT ("msvcrt" IN_LIST ARGN))
+        target_link_libraries(${apiset_name} ntdll_crt)
+    endif()
 
     add_cd_file(TARGET ${apiset_name} DESTINATION reactos/winsxs/${WINARCH}_reactos.apisets_6595b64144ccf1df_1.0.0.0_none_deadbeef FOR all)
 endfunction()

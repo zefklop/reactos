@@ -14,7 +14,7 @@ add_executable(svchost
     ${PCH_SKIP_SOURCE}
     svchost.rc)
 
-target_link_libraries(svchost uuid)
+target_link_libraries(svchost uuid ntdll_crt)
 set_module_type(svchost win32cui UNICODE)
 add_delay_importlibs(svchost netapi32 ole32)
 add_importlibs(svchost advapi32 rpcrt4 kernel32 ntdll)

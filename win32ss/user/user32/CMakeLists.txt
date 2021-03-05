@@ -79,7 +79,7 @@ add_library(user32 MODULE
     ${CMAKE_CURRENT_BINARY_DIR}/user32.def)
 
 set_module_type(user32 win32dll ENTRYPOINT DllMain 12 UNICODE)
-target_link_libraries(user32 user32_wsprintf wine win32ksys ${PSEH_LIB})
+target_link_libraries(user32 user32_wsprintf wine ntdll_crt win32ksys ${PSEH_LIB})
 add_dependencies(user32 asm)
 
 if(MSVC AND (ARCH STREQUAL "i386"))

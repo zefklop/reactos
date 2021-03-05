@@ -59,7 +59,7 @@ add_library(advapi32 MODULE
     ${CMAKE_CURRENT_BINARY_DIR}/advapi32.def)
 
 set_module_type(advapi32 win32dll UNICODE ENTRYPOINT DllMain 12)
-target_link_libraries(advapi32 cryptlib wine ${PSEH_LIB})
+target_link_libraries(advapi32 cryptlib wine ntdll_crt ${PSEH_LIB})
 add_delay_importlibs(advapi32 secur32)
 add_importlibs(advapi32 advapi32_vista rpcrt4 kernel32 ntdll)
 add_pch(advapi32 advapi32.h "${PCH_SKIP_SOURCE}")

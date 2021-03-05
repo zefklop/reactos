@@ -12,7 +12,7 @@ add_library(smdll MODULE
     smdll.rc
     ${CMAKE_CURRENT_BINARY_DIR}/smdll.def)
 
-target_link_libraries(smdll smlib)
+target_link_libraries(smdll smlib ntdll_crt)
 set_module_type(smdll nativedll ENTRYPOINT DllMainCRTStartup 12)
 add_importlibs(smdll ntdll)
 add_pch(smdll precomp.h SOURCE)

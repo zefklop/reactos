@@ -17,6 +17,6 @@ add_library(aclayers MODULE
     ${CMAKE_CURRENT_BINARY_DIR}/aclayers.def)
 
 set_module_type(aclayers win32dll ENTRYPOINT DllMain 12)
-target_link_libraries(aclayers shimlib)
+target_link_libraries(aclayers shimlib ntdll_crt)
 add_importlibs(aclayers user32 kernel32 ntdll)
 add_cd_file(TARGET aclayers DESTINATION reactos/AppPatch FOR all)

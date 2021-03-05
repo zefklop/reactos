@@ -14,7 +14,7 @@ list(APPEND SOURCE
     smss.h)
 
 add_executable(smss WIN32 ${SOURCE} smss.rc)
-target_link_libraries(smss nt ${PSEH_LIB} smlib)
+target_link_libraries(smss nt ${PSEH_LIB} smlib ntdll_crt)
 set_module_type(smss nativecui)
 add_importlibs(smss ntdll)
 add_pch(smss smss.h SOURCE)

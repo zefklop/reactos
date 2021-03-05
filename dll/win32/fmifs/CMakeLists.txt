@@ -21,6 +21,7 @@ add_library(fmifs MODULE
     ${CMAKE_CURRENT_BINARY_DIR}/fmifs.def)
 
 set_module_type(fmifs win32dll UNICODE ENTRYPOINT InitializeFmIfs 12)
+target_link_libraries(fmifs ntdll_crt)
 add_importlibs(fmifs kernel32 ntdll)
 add_pch(fmifs precomp.h "${PCH_SKIP_SOURCE}")
 add_dependencies(fmifs psdk)

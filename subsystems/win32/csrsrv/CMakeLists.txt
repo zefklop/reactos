@@ -20,7 +20,7 @@ add_library(csrsrv MODULE
     ${CMAKE_CURRENT_BINARY_DIR}/csrsrv.def)
 
 set_module_type(csrsrv nativedll)
-target_link_libraries(csrsrv ${PSEH_LIB} smlib)
+target_link_libraries(csrsrv ntdll_crt ${PSEH_LIB} smlib)
 add_importlibs(csrsrv smdll ntdll)
 add_pch(csrsrv srv.h SOURCE)
 add_dependencies(csrsrv psdk bugcodes)

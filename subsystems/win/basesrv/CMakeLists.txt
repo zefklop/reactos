@@ -24,7 +24,7 @@ set_module_type(basesrv win32dll UNICODE ENTRYPOINT DllMain 12)
 set_subsystem(basesrv console)
 ################# END  HACK #################
 
-target_link_libraries(basesrv ${PSEH_LIB})
+target_link_libraries(basesrv ntdll_crt ${PSEH_LIB})
 add_importlibs(basesrv csrsrv ntdll)
 add_pch(basesrv basesrv.h SOURCE)
 add_dependencies(basesrv bugcodes xdk)
