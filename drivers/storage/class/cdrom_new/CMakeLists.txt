@@ -34,7 +34,7 @@ endif()
 
 target_compile_definitions(cdrom PRIVATE DEBUG_USE_KDPRINT)
 
-target_link_libraries(cdrom wdf01000 ntoskrnl_vista libcntpr ${PSEH_LIB})
+target_link_libraries(cdrom wdf01000 ntoskrnl_vista ${PSEH_LIB})
 add_importlibs(cdrom ntoskrnl hal)
 # add_pch(cdrom cdrom.h SOURCE)
 add_cd_file(TARGET cdrom DESTINATION reactos/system32/drivers NO_CAB FOR all)

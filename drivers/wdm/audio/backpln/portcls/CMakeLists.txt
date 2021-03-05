@@ -60,7 +60,7 @@ if(USE_CLANG_CL)
     target_compile_options(portcls PRIVATE "-Wno-missing-braces")
 endif()
 
-target_link_libraries(portcls libcntpr ${PSEH_LIB})
+target_link_libraries(portcls ${PSEH_LIB})
 set_module_type(portcls kernelmodedriver ENTRYPOINT 0 )
 add_pch(portcls private.hpp "${PCH_SKIP_SOURCE}")
 add_importlibs(portcls ntoskrnl ks drmk hal)

@@ -22,7 +22,7 @@ add_library(cmipci MODULE
     ${PCH_SKIP_SOURCE}
     cmipci.rc)
 
-target_link_libraries(cmipci stdunk libcntpr uuid)
+target_link_libraries(cmipci stdunk uuid)
 set_module_type(cmipci wdmdriver UNICODE)
 add_importlibs(cmipci portcls hal ntoskrnl)
 

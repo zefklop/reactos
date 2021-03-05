@@ -29,7 +29,7 @@ if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
 endif()
 
 set_module_type(disk kernelmodedriver)
-target_link_libraries(disk ntoskrnl_vista libcntpr wdmguid)
+target_link_libraries(disk ntoskrnl_vista wdmguid)
 add_importlibs(disk classpnp ntoskrnl hal)
 add_cd_file(TARGET disk DESTINATION reactos/system32/drivers NO_CAB FOR all)
 add_registry_inf(disk_reg.inf)
