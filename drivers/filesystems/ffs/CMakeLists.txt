@@ -44,7 +44,7 @@ endif()
 
 add_definitions(-D__KERNEL__)
 set_module_type(ffs kernelmodedriver)
-target_link_libraries(ffs memcmp ${PSEH_LIB})
+target_link_libraries(ffs ${PSEH_LIB})
 add_importlibs(ffs ntoskrnl hal)
 add_pch(ffs inc/ffsdrv.h SOURCE)
 add_cd_file(TARGET ffs DESTINATION reactos/system32/drivers FOR all)

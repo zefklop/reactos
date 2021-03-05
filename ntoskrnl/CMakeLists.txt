@@ -18,10 +18,8 @@ endif()
 
 add_asm_files(ntoskrnl_asm ${NTOSKRNL_ASM_SOURCE})
 
-if (GCC AND CLANG)
-    # Clang optimises strcmp calls to memcmp.
-    target_sources(libntoskrnl PRIVATE $<TARGET_OBJECTS:memcmp>)
-endif()
+# Embed into libntoskrnl some CRT functions which are useful for our modules
+target_sources(libntoskrnl PRIVATE $<TARGET_OBJECTS:ntoskrnlex>)
 
 list(APPEND PCH_SKIP_SOURCE
     guid.c)

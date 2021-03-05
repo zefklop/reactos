@@ -37,7 +37,7 @@ list(APPEND SOURCE
 
 add_library(fastfat MODULE ${SOURCE} fastfat.rc)
 set_module_type(fastfat kernelmodedriver)
-target_link_libraries(fastfat ${PSEH_LIB} memcmp)
+target_link_libraries(fastfat ${PSEH_LIB})
 if(GDB AND NOT CLANG)
     target_compile_options(fastfat PRIVATE -O0)
 endif()

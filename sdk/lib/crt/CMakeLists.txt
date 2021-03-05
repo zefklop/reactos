@@ -46,8 +46,33 @@ add_library(user32_wsprintf
 add_dependencies(user32_wsprintf psdk)
 target_compile_definitions(user32_wsprintf PRIVATE _USER32_WSPRINTF)
 
-add_library(memcmp mem/memcmp.c)
-add_dependencies(memcmp psdk)
+# For some reason, some CRT functions are only present in ntoskrnl for amd64
+# We make them available for all of our archs by embedding a few of them in
+# the ntoskrnl import lib, like we do for msvcrt
+# cos, sin & atan shouldn't really be there, but we need it for win32k
+# until someone rewrites arc functions without floating point
+if (ARCH STREQUAL "i386")
+    add_asm_files(NTOSKRNLEX_SRC
+        math/i386/atan2_asm.s
+        math/i386/cos_asm.s
+        math/i386/sin_asm.s
+        math/i386/tan_asm.s
+        setjmp/i386/setjmp.s)
+    list(APPEND NTOSKRNLEX_SRC mem/memcmp.c)
+elseif(ARCH STREQUAL "amd64")
+    add_asm_files(NTOSKRNLEX_SRC
+        math/amd64/atan2.S
+        math/amd64/tan.S)
+    list(APPEND NTOSKRNLEX_SRC
+        math/cos.c
+        math/sin.c)
+else()
+    list(APPEND NTOSKRNLEX_SRC mem/memcmp.c)
+endif()
+add_library(ntoskrnlex OBJECT ${NTOSKRNLEX_SRC})
+# Use the same definitions as libcntpr
+target_compile_definitions(ntoskrnlex PRIVATE $<TARGET_PROPERTY:libcntpr,COMPILE_DEFINITIONS>)
+add_dependencies(ntoskrnlex psdk asm)
 
 add_library(getopt misc/getopt.c)
 target_compile_definitions(getopt PRIVATE _DLL __USE_CRTIMP)

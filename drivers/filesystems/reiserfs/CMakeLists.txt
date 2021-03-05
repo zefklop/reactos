@@ -95,7 +95,7 @@ if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
     target_compile_options(reiserfs PRIVATE -Wno-unused-but-set-variable)
 endif()
 
-target_link_libraries(reiserfs memcmp ${PSEH_LIB})
+target_link_libraries(reiserfs ${PSEH_LIB})
 add_definitions(-D__KERNEL__ -D_CRT_NO_POSIX_ERROR_CODES)
 set_module_type(reiserfs kernelmodedriver)
 add_importlibs(reiserfs ntoskrnl hal)
