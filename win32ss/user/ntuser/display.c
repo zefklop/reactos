@@ -155,7 +155,7 @@ NTSTATUS
 NTAPI
 InitVideo(VOID)
 {
-    ULONG iDevNum, iVGACompatible = -1, ulMaxObjectNumber = 0;
+    ULONG iDevNum, ulMaxObjectNumber = 0;
     WCHAR awcDeviceName[20];
     WCHAR awcBuffer[256];
     NTSTATUS Status;
@@ -179,15 +179,6 @@ InitVideo(VOID)
     {
         ERR("Could not open HARDWARE\\DEVICEMAP\\VIDEO registry key:0x%lx\n", Status);
         return Status;
-    }
-
-    /* Read the name of the VGA adapter */
-    cbValue = sizeof(awcDeviceName);
-    Status = RegQueryValue(hkey, L"VgaCompatible", REG_SZ, awcDeviceName, &cbValue);
-    if (NT_SUCCESS(Status))
-    {
-        iVGACompatible = _wtoi(&awcDeviceName[sizeof("\\Device\\Video")-1]);
-        ERR("VGA adapter = %lu\n", iVGACompatible);
     }
 
     /* Get the maximum mumber of adapters */
