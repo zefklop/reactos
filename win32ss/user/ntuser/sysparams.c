@@ -121,13 +121,33 @@ SpiLoadInt(PCWSTR pwszKey, PCWSTR pwszValue, INT iValue)
 {
     WCHAR awcBuffer[12];
     ULONG cbSize;
+    INT RetVal;
 
     cbSize = sizeof(awcBuffer);
     if (!RegReadUserSetting(pwszKey, pwszValue, REG_SZ, awcBuffer, cbSize))
     {
         return iValue;
     }
-    return _wtoi(awcBuffer);
+
+    /* _wtoi is not exported by ntoskrnl */
+    if (!awcBuffer[0])
+        return iValue;
+
+    cbSize = 0;
+    RetVal = 0;
+    while ((awcBuffer[cbSize] == L'0') && (cbSize < ARRAYSIZE(awcBuffer)))
+        cbSize++;
+
+    while (awcBuffer[cbSize] && (cbSize < ARRAYSIZE(awcBuffer)))
+    {
+        if (!isdigit(awcBuffer[cbSize]))
+            return iValue;
+        RetVal *= 10;
+        RetVal += awcBuffer[cbSize] - '0';
+        cbSize++;
+    }
+
+    return RetVal;
 }
 
 static
@@ -949,7 +969,7 @@ SpiGetSet(UINT uiAction, UINT uiParam, PVOID pvParam, FLONG fl)
 
             /* Fixup user's structure size */
             metrics->cbSize = sizeof(NONCLIENTMETRICSW);
-            
+
             if (!SpiSet(&gspv.ncm, metrics, sizeof(NONCLIENTMETRICSW), fl))
                 return 0;
 
