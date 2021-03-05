@@ -594,11 +594,7 @@ BuildUserModeWindowStationName(
     }
 
     /* Compute the needed string size */
-    MemSize = _scwprintf(L"%wZ\\Service-0x%x-%x$",
-                         &gustrWindowStationsDir,
-                         CallerLuid.HighPart,
-                         CallerLuid.LowPart);
-    MemSize = MemSize * sizeof(WCHAR) + sizeof(UNICODE_NULL);
+    MemSize = (gustrWindowStationsDir.Length + sizeof("Service-0x00000000-00000000$")) * sizeof(WCHAR);
     if (MemSize > MAXUSHORT)
     {
         ERR("Window station name length is too long.\n");

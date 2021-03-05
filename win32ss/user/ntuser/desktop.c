@@ -763,9 +763,8 @@ IntResolveDesktop(
     StrSize = 0;
 
     /* Window station name */
-    MemSize = _scwprintf(L"Service-0x%x-%x$", MAXULONG, MAXULONG) * sizeof(WCHAR);
-    MemSize = gustrWindowStationsDir.Length + sizeof(OBJ_NAME_PATH_SEPARATOR)
-              + max(WinStaName.Length, MemSize) + sizeof(UNICODE_NULL);
+    MemSize = sizeof("Service-0x00000000-00000000$") * sizeof(WCHAR);
+    MemSize = gustrWindowStationsDir.Length + sizeof(OBJ_NAME_PATH_SEPARATOR) + max(WinStaName.Length, MemSize);
     if (MemSize > MAXUSHORT)
     {
         ERR("IntResolveDesktop: Window station name length is too long.\n");
