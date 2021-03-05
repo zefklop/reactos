@@ -697,6 +697,20 @@ ShowSize(ULONG x)
 #include "pci_classes.h"
 #include "pci_vendors.h"
 CODE_SEG("INIT")
+static
+PCHAR
+GetTokenEnd(PCHAR p)
+{
+    while (TRUE)
+    {
+        char c = *p;
+        if (!c || (c == '\r') || (c == '\n'))
+            return p;
+        p++;
+    }
+}
+
+CODE_SEG("INIT")
 VOID
 NTAPI
 HalpDebugPciDumpBus(IN ULONG i,
@@ -736,7 +750,7 @@ HalpDebugPciDumpBus(IN ULONG i,
             SubClassName += strlen("\n\t00  ");
         }
         /* Copy the subclass into our buffer */
-        p = strpbrk(SubClassName, "\r\n");
+        p = GetTokenEnd(SubClassName);
         Length = p - SubClassName;
         if (Length >= sizeof(bSubClassName)) Length = sizeof(bSubClassName) - 1;
         strncpy(bSubClassName, SubClassName, Length);
@@ -750,7 +764,7 @@ HalpDebugPciDumpBus(IN ULONG i,
     {
         /* Copy the vendor name into our buffer */
         VendorName += strlen("\r\n0000  ");
-        p = strpbrk(VendorName, "\r\n");
+        p = GetTokenEnd(VendorName);
         Length = p - VendorName;
         if (Length >= sizeof(bVendorName)) Length = sizeof(bVendorName) - 1;
         strncpy(bVendorName, VendorName, Length);
@@ -758,7 +772,7 @@ HalpDebugPciDumpBus(IN ULONG i,
         p += strlen("\r\n");
         while (*p == '\t' || *p == '#')
         {
-            p = strpbrk(p, "\r\n");
+            p = GetTokenEnd(p);
             p += strlen("\r\n");
         }
         Boundary = p;
@@ -774,7 +788,7 @@ HalpDebugPciDumpBus(IN ULONG i,
         {
             /* Copy the product name into our buffer */
             ProductName += strlen("\t0000  ");
-            p = strpbrk(ProductName, "\r\n");
+            p = GetTokenEnd(ProductName);
             Length = p - ProductName;
             if (Length >= sizeof(bProductName)) Length = sizeof(bProductName) - 1;
             strncpy(bProductName, ProductName, Length);
@@ -782,7 +796,7 @@ HalpDebugPciDumpBus(IN ULONG i,
             p += strlen("\r\n");
             while ((*p == '\t' && *(p + 1) == '\t') || *p == '#')
             {
-                p = strpbrk(p, "\r\n");
+                p = GetTokenEnd(p);
                 p += strlen("\r\n");
             }
             Boundary = p;
@@ -801,7 +815,7 @@ HalpDebugPciDumpBus(IN ULONG i,
             {
                 /* Copy the subvendor name into our buffer */
                 SubVendorName += strlen("\t\t0000 0000  ");
-                p = strpbrk(SubVendorName, "\r\n");
+                p = GetTokenEnd(SubVendorName);
                 Length = p - SubVendorName;
                 if (Length >= sizeof(bSubVendorName)) Length = sizeof(bSubVendorName) - 1;
                 strncpy(bSubVendorName, SubVendorName, Length);
