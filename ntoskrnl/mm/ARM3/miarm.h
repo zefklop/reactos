@@ -8,6 +8,11 @@
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
 #define MI_LOWEST_VAD_ADDRESS                   (PVOID)MM_LOWEST_USER_ADDRESS
 
 /* Make the code cleaner with some definitions for size multiples */
@@ -1155,10 +1160,9 @@ MiInitializeWorkingSetList(_In_ PMMSUPPORT WorkingSetList);
 //
 FORCEINLINE
 BOOLEAN
-MiIsRosSectionObject(IN PVOID Section)
+MiIsRosSectionObject(IN PSECTION Section)
 {
-    PSECTION RosSection = Section;
-    return RosSection->u.Flags.filler;
+    return Section->u.Flags.filler;
 }
 
 #define MI_IS_ROS_PFN(x)     ((x)->u4.AweAllocation == TRUE)
@@ -2529,6 +2533,10 @@ MiSynchronizeSystemPde(PMMPDE PointerPde)
     /* Return, if we had success */
     return SystemPde.u.Hard.Valid != 0;
 }
+#endif
+
+#ifdef __cplusplus
+} // extern "C"
 #endif
 
 /* EOF */
