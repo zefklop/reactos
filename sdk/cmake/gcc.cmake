@@ -474,8 +474,9 @@ add_library(libgcc STATIC IMPORTED)
 execute_process(COMMAND ${GXX_EXECUTABLE} -print-file-name=libgcc.a OUTPUT_VARIABLE LIBGCC_LOCATION)
 string(STRIP ${LIBGCC_LOCATION} LIBGCC_LOCATION)
 set_target_properties(libgcc PROPERTIES IMPORTED_LOCATION ${LIBGCC_LOCATION})
-# libgcc needs kernel32 imports, a CRT and msvcrtex
-target_link_libraries(libgcc INTERFACE libkernel32 libmsvcrt msvcrtex)
+# libgcc needs kernel32 imports, a CRT, and its own-provided msvcrtex
+# That is, if you are not a kernel module
+target_link_libraries(libgcc INTERFACE $<$<NOT:$<IN_LIST:$<TARGET_PROPERTY:REACTOS_MODULE_TYPE>,${KERNEL_MODULE_TYPES}>>:libkernel32;libmsvcrt;msvcrtex>)
 
 add_library(libsupc++ STATIC IMPORTED GLOBAL)
 execute_process(COMMAND ${GXX_EXECUTABLE} -print-file-name=libsupc++.a OUTPUT_VARIABLE LIBSUPCXX_LOCATION)
@@ -489,7 +490,7 @@ execute_process(COMMAND ${GXX_EXECUTABLE} -print-file-name=libmingwex.a OUTPUT_V
 string(STRIP ${LIBMINGWEX_LOCATION} LIBMINGWEX_LOCATION)
 set_target_properties(libmingwex PROPERTIES IMPORTED_LOCATION ${LIBMINGWEX_LOCATION})
 # libmingwex requires a CRT and imports from kernel32
-target_link_libraries(libmingwex INTERFACE libmsvcrt libkernel32)
+target_link_libraries(libmingwex INTERFACE $<$<NOT:$<IN_LIST:$<TARGET_PROPERTY:REACTOS_MODULE_TYPE>,${KERNEL_MODULE_TYPES}>>:libmsvcrt;libkernel32>)
 
 add_library(libstdc++ STATIC IMPORTED GLOBAL)
 execute_process(COMMAND ${GXX_EXECUTABLE} -print-file-name=libstdc++.a OUTPUT_VARIABLE LIBSTDCCXX_LOCATION)
