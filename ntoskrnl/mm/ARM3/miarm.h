@@ -1488,7 +1488,7 @@ MiUnlockWorkingSetShared(IN PETHREAD Thread,
 }
 
 FORCEINLINE
-VOID
+BOOLEAN
 MiConvertSharedWorkingSetLockToExclusive(
     _In_ PETHREAD Thread,
     _In_ PMMSUPPORT Vm)
@@ -1501,16 +1501,15 @@ MiConvertSharedWorkingSetLockToExclusive(
     /* And it should have one and only one shared lock */
     ASSERT((Thread->OwnsProcessWorkingSetShared + Thread->OwnsSessionWorkingSetShared + Thread->OwnsSystemWorkingSetShared) == 1);
 
-    /* This must succeed. So loop */
-    while (!ExConvertPushLockSharedToExclusive(&Vm->WorkingSetMutex))
-        YieldProcessor();
+    if (!ExConvertPushLockSharedToExclusive(&Vm->WorkingSetMutex))
+        return FALSE;
 
     if (Vm == &MmSystemCacheWs)
     {
         ASSERT(Thread->OwnsSystemWorkingSetShared);
         Thread->OwnsSystemWorkingSetShared = FALSE;
         Thread->OwnsSystemWorkingSetExclusive = TRUE;
-        return;
+        return TRUE;
     }
 
     if (Vm->Flags.SessionSpace)
@@ -1518,12 +1517,13 @@ MiConvertSharedWorkingSetLockToExclusive(
         ASSERT(Thread->OwnsSessionWorkingSetShared);
         Thread->OwnsSessionWorkingSetShared = FALSE;
         Thread->OwnsSessionWorkingSetExclusive = TRUE;
-        return;
+        return TRUE;
     }
 
     ASSERT(Thread->OwnsProcessWorkingSetShared);
     Thread->OwnsProcessWorkingSetShared = FALSE;
     Thread->OwnsProcessWorkingSetExclusive = TRUE;
+    return TRUE;
 }
 
 FORCEINLINE

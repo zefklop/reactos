@@ -550,11 +550,10 @@ MmWorkingSetManager(VOID)
         /* Share-lock for now, we're only reading */
         MiLockWorkingSetShared(PsGetCurrentThread(), Vm);
 
-        if ((Vm->WorkingSetSize > Vm->MaximumWorkingSetSize) ||
-            (TrimHard && (Vm->WorkingSetSize > Vm->MinimumWorkingSetSize)))
+        if (((Vm->WorkingSetSize > Vm->MaximumWorkingSetSize) ||
+            (TrimHard && (Vm->WorkingSetSize > Vm->MinimumWorkingSetSize))) &&
+            MiConvertSharedWorkingSetLockToExclusive(PsGetCurrentThread(), Vm))
         {
-            MiConvertSharedWorkingSetLockToExclusive(PsGetCurrentThread(), Vm);
-
             /* Tell the trimmer we're in dire need */
             if (TrimHard)
                 Vm->Flags.TrimHard = 1;
