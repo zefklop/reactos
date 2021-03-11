@@ -2,6 +2,11 @@
 
 #include <internal/arch/mm.h>
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
 /* Takes the PTE index (for one PD page) from a PTE address */
 FORCEINLINE
 ULONG
@@ -1706,3 +1711,6 @@ MmCopyVirtualMemory(IN PEPROCESS SourceProcess,
                     IN KPROCESSOR_MODE PreviousMode,
                     OUT PSIZE_T ReturnSize);
 
+#ifdef __cplusplus
+} // extern "C"
+#endif

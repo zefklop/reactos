@@ -1,5 +1,10 @@
 #pragma once
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
 /* INCLUDES *****************************************************************/
 
 #include "arch/ke.h"
@@ -1050,3 +1055,7 @@ KeBugCheckUnicodeToAnsi(
 );
 
 #include "ke_x.h"
+
+#ifdef __cplusplus
+} // extern "C"
+#endif
