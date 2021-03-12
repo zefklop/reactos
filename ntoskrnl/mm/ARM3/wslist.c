@@ -334,61 +334,6 @@ MiRemoveFromWorkingSetList(
     Vm->WorkingSetSize -= PAGE_SIZE;
 }
 
-_Requires_exclusive_lock_held_(WorkingSet->WorkingSetMutex)
-VOID
-NTAPI
-MiInitializeWorkingSetList(IN PMMSUPPORT WorkingSet)
-{
-    /* We start with the space left behind us */
-    WorkingSet->VmWorkingSetList->Wsle = (PMMWSLE)(WorkingSet->VmWorkingSetList + 1);
-    /* Which leaves us this much entries */
-    WorkingSet->VmWorkingSetList->LastInitializedWsle = ((PAGE_SIZE - sizeof(MMWSL)) / sizeof(MMWSLE)) - 1;
-
-    /* No entry in this list yet ! */
-    WorkingSet->VmWorkingSetList->LastEntry = MAXULONG;
-    WorkingSet->VmWorkingSetList->HashTable = NULL;
-    WorkingSet->VmWorkingSetList->HashTableSize = 0;
-    WorkingSet->VmWorkingSetList->NumberOfImageWaiters = 0;
-    WorkingSet->VmWorkingSetList->VadBitMapHint = 0;
-    WorkingSet->VmWorkingSetList->HashTableStart = NULL;
-    WorkingSet->VmWorkingSetList->HighestPermittedHashAddress = NULL;
-    WorkingSet->VmWorkingSetList->FirstFree = MMWSLE_NEXT_FREE_INVALID;
-    WorkingSet->VmWorkingSetList->FirstDynamic = 0;
-    WorkingSet->VmWorkingSetList->NextSlot = 0;
-
-    /* Insert the address we already know: our PDE base and the Working Set List */
-    if (MI_IS_PROCESS_WORKING_SET(WorkingSet))
-    {
-#if _MI_PAGING_LEVELS == 4
-        MiInsertInWorkingSetList(WorkingSet, (PVOID)PXE_BASE, 0);
-#elif _MI_PAGING_LEVELS == 3
-        MiInsertInWorkingSetList(WorkingSet, (PVOID)PPE_BASE, 0);
-#elif _MI_PAGING_LEVELS == 2
-        MiInsertInWorkingSetList(WorkingSet, (PVOID)PDE_BASE, 0);
-#endif
-
-#if _MI_PAGING_LEVELS == 4
-        MiInsertInWorkingSetList(WorkingSet, MiAddressToPpe(MmWorkingSetList), 0);
-#endif
-#if _MI_PAGING_LEVELS >= 3
-        MiInsertInWorkingSetList(WorkingSet, MiAddressToPde(MmWorkingSetList), 0);
-#endif
-        MiInsertInWorkingSetList(WorkingSet, MiAddressToPte(MmWorkingSetList), 0);
-        MiInsertInWorkingSetList(WorkingSet, MmWorkingSetList, 0);
-    }
-    else
-    {
-        MiInsertInWorkingSetList(WorkingSet, WorkingSet->VmWorkingSetList, 0);
-    }
-
-    /* Mark this as not initializing anymore */
-    ASSERT(WorkingSet->VmWorkingSetList->FirstDynamic >= 1);
-    WorkingSet->VmWorkingSetList->LastEntry = WorkingSet->VmWorkingSetList->FirstDynamic - 1;
-
-    /* We can add this to our list */
-    ExInterlockedInsertTailList(&MmWorkingSetExpansionHead, &WorkingSet->WorkingSetExpansionLinks, &MmExpansionLock);
-}
-
 static
 VOID
 MiTrimWorkingSet(PMMSUPPORT Vm)
