@@ -120,10 +120,11 @@ typedef GUID FMTID,*LPFMTID;
 #endif
 
 #if !defined(__midl) && !defined(__WIDL__)
-#include <string.h>
-#ifdef __cplusplus
 
-__inline int InlineIsEqualGUID(REFGUID rguid1, REFGUID rguid2)
+#  ifdef __cplusplus
+__inline
+int
+InlineIsEqualGUID(REFGUID rguid1, REFGUID rguid2)
 {
     return (
         ((unsigned long *) &rguid1)[0] == ((unsigned long *) &rguid2)[0] &&
@@ -131,31 +132,38 @@ __inline int InlineIsEqualGUID(REFGUID rguid1, REFGUID rguid2)
         ((unsigned long *) &rguid1)[2] == ((unsigned long *) &rguid2)[2] &&
         ((unsigned long *) &rguid1)[3] == ((unsigned long *) &rguid2)[3]);
 }
+#  else
+#    define InlineIsEqualGUID(rguid1, rguid2) ( \
+        ((unsigned long *)(rguid1))[0] == ((unsigned long *)(rguid2))[0] && \
+        ((unsigned long *)(rguid1))[1] == ((unsigned long *)(rguid2))[1] && \
+        ((unsigned long *)(rguid1))[2] == ((unsigned long *)(rguid2))[2] && \
+        ((unsigned long *)(rguid1))[3] == ((unsigned long *)(rguid2))[3])
+#  endif
 
-__inline int IsEqualGUID(REFGUID rguid1, REFGUID rguid2)
+#  ifdef __INLINE_ISEQUAL_GUID
+#    define IsEqualGUID InlineIsEqualGUID
+#  else
+#    include <string.h>
+#    ifdef __cplusplus
+__inline
+int
+IsEqualGUID(REFGUID rguid1, REFGUID rguid2)
 {
     return !memcmp(&rguid1, &rguid2, sizeof(GUID));
 }
+#    else
+#      define IsEqualGUID(rguid1, rguid2) (!memcmp((rguid1), (rguid2), sizeof(GUID)))
+#    endif
+#  endif /* __INLINE_ISEQUAL_GUID */
 
-#else
-
-#define InlineIsEqualGUID(rguid1, rguid2) \
-    (((unsigned long *)rguid1)[0] == ((unsigned long *)rguid2)[0] && \
-     ((unsigned long *)rguid1)[1] == ((unsigned long *)rguid2)[1] && \
-     ((unsigned long *)rguid1)[2] == ((unsigned long *)rguid2)[2] && \
-     ((unsigned long *)rguid1)[3] == ((unsigned long *)rguid2)[3])
-#define IsEqualGUID(rguid1, rguid2) (!memcmp(rguid1, rguid2, sizeof(GUID)))
-
-#endif
 #endif /* __midl && __WIDL__ */
 
 #ifdef __cplusplus
-#include <string.h>
 #if !defined _SYS_GUID_OPERATOR_EQ_ && !defined _NO_SYS_GUID_OPERATOR_EQ_
 #define _SYS_GUID_OPERATOR_EQ_
 inline bool operator==(const GUID& guidOne, const GUID& guidOther)
 {
-    return !memcmp(&guidOne,&guidOther,sizeof(GUID));
+    return IsEqualGUID(guidOne,guidOther);
 }
 inline bool operator!=(const GUID& guidOne, const GUID& guidOther)
 {
