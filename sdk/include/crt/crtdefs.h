@@ -9,6 +9,21 @@
 #ifndef _INC_CRTDEFS
 #define _INC_CRTDEFS
 
+/* See which CRT we are using */
+#  define __crt_bits_header_ident(x) x
+#  define __crt_bits_header__(x,y) _CRT_STRINGIZE(__crt_bits_header_ident(x)__crt_bits_header_ident(y))
+
+#if defined(_MSVCRT_) || defined(_DLL)
+#  define _CRT_IS_MSVCRT
+#  define __crt_bits_header(y) __crt_bits_header__(msvcrt/,y)
+#elif defined(_LIBCNT_) || defined(_CRT_IS_NTDLL) || defined (_CRT_IS_NTOS) || defined (_CRT_IS_LIBCNT)
+#  define _CRT_IS_NT
+#  define __crt_bits_header(y) __crt_bits_header__(nt/,y)
+#else
+/* No CRT library used. Constants & defines only */
+#  define __crt_bits_header(header) "_dummy.h"
+#endif
+
 #ifdef _USE_32BIT_TIME_T
 #ifdef _WIN64
 #error You cannot use 32-bit time_t (_USE_32BIT_TIME_T) with _WIN64
@@ -56,13 +71,13 @@
 #endif
 
 #ifndef _CRTIMP
- #if defined(CRTDLL) /* Defined for ntdll, crtdll, msvcrt, etc */ || defined(_CRT_IS_LIBCNT)
-  #define _CRTIMP
- #elif defined(_DLL) || defined(_CRT_IS_NTDLL) || defined(_CRT_IS_NTOS)
-  #define _CRTIMP __declspec(dllimport)
- #else /* !CRTDLL && !_DLL */
-  #define _CRTIMP
- #endif /* CRTDLL || _DLL */
+#  if defined(_CRT_IS_LIBCNT) || defined(_MSVCRT_) || defined(_LIBCNT_) /* CRT being built or statically linked */
+#    define _CRTIMP
+#  elif defined(_DLL) || defined(_CRT_IS_NTDLL) || defined(_CRT_IS_NTOS) /* Dynamically linked CRT */
+#    define _CRTIMP __declspec(dllimport)
+#  else
+#    define _CRTIMP /* FIXME: Simply don't define it */
+#  endif
 #endif /* !_CRTIMP */
 
 //#define _CRT_ALTERNATIVE_INLINES
