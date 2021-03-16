@@ -120,9 +120,9 @@ RtlpClassifyChars(PCWSTR S, PULONG Base)
     *Base = 0;
     for (Len = 0; S[Len]; ++Len)
     {
-        if (iswascii(S[Len]) && isdigit(S[Len]))
+        if (iswdigit(S[Len]))
             *Base = max(*Base, 10);
-        else if (iswascii(S[Len]) && isxdigit(S[Len]))
+        else if (iswxdigit(S[Len]))
             *Base = 16;
         else
             break;
