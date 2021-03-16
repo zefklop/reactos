@@ -5,8 +5,6 @@
 extern "C" {
 #endif
 
-#ifndef _CTYPE_DEFINED
-
 _Check_return_
 _CRTIMP
 int
@@ -81,8 +79,6 @@ _isctype(
     _In_ int _C,
     _In_ int _Type);
 #endif
-
-#endif /* !defined(_CTYPE_DEFINED) */
 
 #ifdef __cplusplus
 } // extern "C"

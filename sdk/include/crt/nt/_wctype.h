@@ -4,9 +4,6 @@
 extern "C" {
 #endif
 
-#ifndef _WCTYPE_DEFINED
-#define _WCTYPE_DEFINED
-
 _Check_return_
 _CRTIMP
 wint_t
@@ -55,7 +52,6 @@ __cdecl
 iswalpha(_In_ wint_t _C);
 
 #endif /* !defined(_CRT_IS_NTOS) */
-#endif /* !defined(_WCTYPE_DEFINED) */
 
 #ifdef __cplusplus
 }

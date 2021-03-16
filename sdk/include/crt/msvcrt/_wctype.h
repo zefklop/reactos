@@ -5,9 +5,6 @@
 extern "C" {
 #endif
 
-#ifndef _CRT_WCTYPEDATA_DEFINED
-#  define _CRT_WCTYPEDATA_DEFINED
-
 _CRTIMP extern const unsigned short _wctype[];
 _CRTIMP const wctype_t * __cdecl __pwctype_func(void);
 _CRTIMP extern const wctype_t *_pwctype;
@@ -15,11 +12,6 @@ _CRTIMP extern const wctype_t *_pwctype;
 #  ifndef _CTYPE_DISABLE_MACROS
 #    define _pwctype (__pwctype_func())
 #  endif /* !_CTYPE_DISABLE_MACROS */
-
-#endif /* !_CRT_WCTYPEDATA_DEFINED */
-
-#ifndef _WCTYPE_DEFINED
-#define _WCTYPE_DEFINED
 
 _Check_return_
 _CRTIMP
@@ -141,8 +133,6 @@ _isleadbyte_l(
     _In_opt_ _locale_t _Locale);
 
 #  endif /* defined(_MSVCRT_) || (defined(_DLL) && _WIN32_WINNT >= 0x600) */
-
-#endif /* !defined(_WCTYPE_DEFINED) */
 
 #ifdef __cplusplus
 }

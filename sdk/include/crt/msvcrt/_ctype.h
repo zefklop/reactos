@@ -5,8 +5,6 @@
 extern "C" {
 #endif
 
-#ifndef _CRT_CTYPEDATA_DEFINED
-#  define _CRT_CTYPEDATA_DEFINED
 _CRTIMP const unsigned short * __cdecl __pctype_func(void);
 _CRTIMP const unsigned short *_pctype;
 
@@ -24,9 +22,6 @@ _CRTIMP const unsigned short *_pctype;
 #    endif /* _M_CEE_PURE */
 #  endif /* !_CTYPE_DISABLE_MACROS */
 
-#endif /* !_CRT_CTYPEDATA_DEFINED */
-
-#ifndef _CTYPE_DEFINED
 
 _Check_return_
 _CRTIMP
@@ -157,8 +152,6 @@ _isctype_l(
     _In_ int _Type,
     _In_opt_ _locale_t _Locale);
 #  endif /* defined(_MSVCRT_) || (defined(_DLL) && _WIN32_WINNT >= 0x600) */
-
-#endif /* !defined(_CTYPE_DEFINED) */
 
 #ifdef __cplusplus
 } // extern "C"
