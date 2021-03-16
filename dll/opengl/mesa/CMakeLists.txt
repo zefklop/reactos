@@ -66,6 +66,8 @@ list(APPEND SOURCE
 )
 
 add_library(mesa STATIC ${SOURCE} ${mesa_asm})
+target_link_libraries(mesa PUBLIC libmsvcrt)
+target_compile_definitions(mesa PRIVATE BUILD_GL32)
 add_dependencies(mesa psdk)
 
-    
+
