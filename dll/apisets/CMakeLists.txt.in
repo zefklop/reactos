@@ -8,13 +8,10 @@ function (add_apiset apiset_name baseaddress)
     spec2def(${apiset_name}.dll ${apiset_name}.spec ADD_IMPORTLIB)
 
     add_definitions(
-        -D_CTYPE_DISABLE_MACROS
         -D_NO_INLINING
         -D__CRT__NO_INLINE
         -D__STDC_WANT_SECURE_LIB__=0
         -D_INC_STRING
-        -D_CTYPE_DEFINED
-        -D_WCTYPE_DEFINED
         -D_CRT_ERRNO_DEFINED)
 
     add_library(${apiset_name} MODULE
