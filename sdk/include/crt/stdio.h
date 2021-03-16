@@ -1293,6 +1293,10 @@ extern "C" {
 
 #pragma pack(pop)
 
+/* Secure CRT functions are not available before Win Vista.
+ * But we have them around when building the CRT DLLs */
+#if defined(_MSVCRT_) || (_DLL && _WIN32_WINNT >= 0x0600)
 #include <sec_api/stdio_s.h>
+#endif
 
 #endif
