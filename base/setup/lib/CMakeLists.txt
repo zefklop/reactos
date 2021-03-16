@@ -29,4 +29,10 @@ list(APPEND SOURCE
 
 add_library(setuplib ${SOURCE})
 add_pch(setuplib precomp.h SOURCE)
+target_link_libraries(setuplib PUBLIC libmsvcrt)
 add_dependencies(setuplib xdk) # psdk
+
+add_library(setuplib_nt ${SOURCE})
+add_pch(setuplib_nt precomp.h SOURCE)
+target_link_libraries(setuplib_nt PUBLIC ntdll_crt)
+add_dependencies(setuplib_nt xdk) # psdk
