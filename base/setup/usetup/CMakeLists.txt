@@ -36,6 +36,6 @@ endif()
 
 add_pch(usetup usetup.h SOURCE)
 set_module_type(usetup nativecui)
-target_link_libraries(usetup inflib setuplib_nt zlib_solo ext2lib vfatlib btrfslib ntdll_crt chkstk)
+target_link_libraries(usetup inflib setuplib_nt zlib_solo ext2lib vfatlib_nt btrfslib ntdll_crt chkstk)
 add_importlibs(usetup ntdll)
 add_cd_file(TARGET usetup DESTINATION reactos/system32 NO_CAB NAME_ON_CD smss.exe FOR bootcd regtest)
