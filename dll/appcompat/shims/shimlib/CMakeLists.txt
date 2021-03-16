@@ -7,4 +7,5 @@ list(APPEND SOURCE
     implement_shim.inl)
 
 add_library(shimlib ${SOURCE})
+target_link_libraries(shimlib PUBLIC ntdll_crt)
 add_dependencies(shimlib xdk)
