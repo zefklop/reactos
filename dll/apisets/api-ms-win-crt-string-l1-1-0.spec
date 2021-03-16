@@ -99,7 +99,7 @@
 @ stub _wcsupr_s
 @ stub _wcsupr_s_l
 @ stub _wcsxfrm_l
-@ stub _wctype
+@ extern _wctype msvcrt._wctype
 @ stdcall is_wctype() msvcrt.is_wctype
 @ stdcall isalnum() msvcrt.isalnum
 @ stdcall isalpha() msvcrt.isalpha
