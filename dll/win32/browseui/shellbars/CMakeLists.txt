@@ -1,8 +1,6 @@
 
 PROJECT(SHELL)
 
-add_definitions(-DUNICODE -D_UNICODE)
-
 list(APPEND SOURCE
     CBandSite.cpp
     CBandSiteMenu.cpp
@@ -12,7 +10,10 @@ list(APPEND SOURCE
     shellbars.h)
 
 add_library(shellbars OBJECT ${SOURCE})
-target_link_libraries(shellbars PRIVATE atl_classes)
+target_link_libraries(shellbars
+    PRIVATE atl_classes
+    PUBLIC libmsvcrt)
+target_compile_definitions(shellbars PRIVATE UNICODE _UNICODE)
 
 if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
     target_compile_options(shellbars PRIVATE -Wno-unused-but-set-variable)
