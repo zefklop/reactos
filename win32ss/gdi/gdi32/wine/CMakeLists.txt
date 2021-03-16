@@ -24,4 +24,5 @@ list(APPEND SOURCE
 
 add_library(winegdi ${SOURCE})
 target_link_libraries(winegdi PRIVATE pseh)
+target_link_libraries(winegdi PUBLIC ntdll_crt)
 add_dependencies(winegdi psdk)
