@@ -14,6 +14,7 @@ list(APPEND COMMON_SOURCE
 
 add_library(fusion_common STATIC ${COMMON_SOURCE})
 add_dependencies(fusion_common psdk)
+target_link_libraries(fusion_common PUBLIC libmsvcrt)
 add_pch(fusion_common precomp.h COMMON_SOURCE)
 
 add_library(fusion MODULE
