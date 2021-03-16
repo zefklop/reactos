@@ -117,7 +117,7 @@ iswgraph(_In_ wint_t _C);
 #  if defined(__cplusplus) && (__cplusplus >= 201103L)
 __forceinline int iswblank(_In_ wint_t _C)
 {
-    return (iswctype(_C, _BLANK) || _C == '\t');
+    return (iswctype(_C, 0x40 /* _BLANK */) || _C == '\t');
 }
 #  endif /* defined(__cplusplus) && (__cplusplus >= 201103L) */
 
