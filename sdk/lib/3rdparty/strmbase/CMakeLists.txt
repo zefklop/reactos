@@ -24,5 +24,6 @@ list(APPEND SOURCE
     precomp.h)
 
 add_library(strmbase ${SOURCE})
+target_link_libraries(strmbase PUBLIC libmsvcrt)
 add_pch(strmbase precomp.h SOURCE)
 add_dependencies(strmbase psdk dxsdk)
