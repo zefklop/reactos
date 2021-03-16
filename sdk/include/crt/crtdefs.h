@@ -56,9 +56,9 @@
 #endif
 
 #ifndef _CRTIMP
- #ifdef CRTDLL /* Defined for ntdll, crtdll, msvcrt, etc */
+ #if defined(CRTDLL) /* Defined for ntdll, crtdll, msvcrt, etc */ || defined(_CRT_IS_LIBCNT)
   #define _CRTIMP
- #elif defined(_DLL)
+ #elif defined(_DLL) || defined(_CRT_IS_NTDLL) || defined(_CRT_IS_NTOS)
   #define _CRTIMP __declspec(dllimport)
  #else /* !CRTDLL && !_DLL */
   #define _CRTIMP
