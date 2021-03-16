@@ -112,7 +112,7 @@ endif()
 
 add_asm_files(rtl_asm ${ASM_SOURCE})
 add_library(rtl ${SOURCE} ${rtl_asm})
-target_link_libraries(rtl PRIVATE pseh)
+target_link_libraries(rtl PRIVATE pseh libcntpr)
 add_pch(rtl rtl.h SOURCE)
 add_dependencies(rtl psdk asm)
 
