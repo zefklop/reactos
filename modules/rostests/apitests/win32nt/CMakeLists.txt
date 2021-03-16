@@ -1,5 +1,4 @@
 
-add_definitions(-D_DLL -D__USE_CRTIMP)
 include_directories(${REACTOS_SOURCE_DIR}/win32ss/include ../gditools)
 
 list(APPEND SOURCE
