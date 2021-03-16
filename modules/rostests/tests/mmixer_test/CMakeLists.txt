@@ -1,5 +1,4 @@
 
-add_definitions(-D_DLL -D__USE_CRTIMP)
 include_directories(${REACTOS_SOURCE_DIR}/sdk/include/reactos/libs/sound)
 include_directories(${REACTOS_SOURCE_DIR}/sdk/lib/drivers/sound/mmixer)
 add_executable(mmixer_test test.c)
