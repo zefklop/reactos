@@ -217,6 +217,8 @@ add_library(freeldr_common
     ${FREELDR_NTLDR_SOURCE}
     ${FREELDR_BOOTMGR_SOURCE})
 
+target_link_libraries(freeldr_common PUBLIC libcntpr)
+
 if(USE_CLANG_CL)
     # We need to reduce the binary size
     target_compile_options(freeldr_common PRIVATE "/Os")
@@ -241,7 +243,7 @@ add_dependencies(freeldr_common bugcodes asm xdk)
 
 ## GCC builds need this extra thing for some reason...
 if(ARCH STREQUAL "i386" AND NOT MSVC)
-    target_link_libraries(freeldr_common mini_hal)
+    target_link_libraries(freeldr_common PUBLIC mini_hal)
 endif()
 
 add_asm_files(freeldr_base_asm ${FREELDR_BASE_ASM_SOURCE})
