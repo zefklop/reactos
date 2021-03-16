@@ -1,9 +1,5 @@
 project(SHELL)
 
-add_definitions(
-    -DUNICODE
-    -D_UNICODE)
-
 list(APPEND SOURCE
     recyclebin.c
     recyclebin_generic.c
@@ -13,5 +9,7 @@ list(APPEND SOURCE
     recyclebin_private.h)
 
 add_library(recyclebin ${SOURCE} guid.c)
+target_compile_definitions(recyclebin PRIVATE UNICODE _UNICODE)
+target_link_libraries(recyclebin PUBLIC libmsvcrt)
 add_pch(recyclebin recyclebin_private.h SOURCE)
 add_dependencies(recyclebin psdk)
