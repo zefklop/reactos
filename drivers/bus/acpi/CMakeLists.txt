@@ -178,6 +178,7 @@ list(APPEND ACPICA_PCH_SKIP_SOURCE
 add_library(acpica
     ${ACPICA_SOURCE}
     ${ACPICA_PCH_SKIP_SOURCE})
+target_link_libraries(acpica PUBLIC libntoskrnl) # for the CRT
 
 add_pch(acpica acpica/include/acpi.h "${ACPICA_PCH_SKIP_SOURCE}")
 set_target_properties(acpica PROPERTIES COMPILE_DEFINITIONS "ACPI_USE_LOCAL_CACHE;ACPI_USE_SYSTEM_INTTYPES")
