@@ -1,10 +1,8 @@
 
 include_directories(${REACTOS_SOURCE_DIR}/sdk/lib/crt/include)
 spec2def(msvcrt.dll msvcrt.spec ADD_IMPORTLIB)
-declare_crt_library(libmsvcrt)
+declare_crt_library(libmsvcrt _DLL)
 
-# Let consumers of msvcrt have the right defines
-target_compile_definitions(libmsvcrt INTERFACE _DLL __USE_CRTIMP)
 # Embed msvcrtex into libmsvcrt
 target_sources(libmsvcrt PRIVATE $<TARGET_OBJECTS:msvcrtex>)
 
