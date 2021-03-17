@@ -272,6 +272,24 @@ _Check_return_ __CRT_INLINE long long llrintf(_In_ float x) { return (long long)
 _Check_return_ __CRT_INLINE long long llrintl(_In_ long double x) { return (long long)((x < 0) ? (x - 0.5f) : (x + 0.5)); }
 _Check_return_ __CRT_INLINE double log2(_In_ double x) { return log(x) / log(2); }
 
+_Check_return_
+__MINGW_NOTHROW
+_CRTIMP
+int
+__cdecl
+_finite(_In_ double);
+
+_Check_return_
+__MINGW_NOTHROW
+_CRTIMP
+int
+__cdecl
+_isnan(_In_ double);
+
+#define isfinite _finite
+#define isinf _finite
+#define isnan _isnan
+
 #ifndef NO_OLDNAMES /* !__STDC__ */
 
 #define DOMAIN _DOMAIN

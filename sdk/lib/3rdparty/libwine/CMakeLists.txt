@@ -4,9 +4,6 @@ include_directories(${REACTOS_SOURCE_DIR}/sdk/include/reactos/wine)
 list(APPEND SOURCE
     config.c
     debug_ros.c
-    isinf.c
-    isfinite.c
-    isnan.c
     loader.c
     ${REACTOS_SOURCE_DIR}/sdk/lib/crt/string/wctype.c
     path.c
