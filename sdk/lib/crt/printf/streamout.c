@@ -71,14 +71,9 @@ enum
 #define get_exp(f) (int)floor(f == 0 ? 0 : (f >= 0 ? log10(f) : log10(-f)))
 #define round(x) floor((x) + 0.5)
 
-#ifndef _USER32_WSPRINTF
+#if !defined(_USER32_WSPRINTF) && !defined(_LIBCNT_)
 
 void
-#ifdef _LIBCNT_
-/* Due to restrictions in kernel mode regarding the use of floating point,
-   we prevent it from being inlined */
-__declspec(noinline)
-#endif
 format_float(
     TCHAR chr,
     unsigned int flags,
@@ -554,8 +549,12 @@ streamout(FILE *stream, const TCHAR *format, va_list argptr)
 #else
                 flags &= ~FLAG_WIDECHAR;
 #endif
+#ifndef _LIBCNT_
                 /* Use external function, one for kernel one for user mode */
                 format_float(chr, flags, precision, &string, &prefix, &argptr);
+#else
+                string = _T("#FP_VAL");
+#endif
                 len = _tcslen(string);
                 precision = 0;
                 break;

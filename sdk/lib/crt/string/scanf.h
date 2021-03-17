@@ -130,7 +130,9 @@
 #endif /* CONSOLE */
 
 _FUNCTION_ {
+#ifndef _LIBCNT_
     pthreadlocinfo locinfo;
+#endif
     int rd = 0, consumed = 0;
     int nch;
     if (!*format) return 0;
@@ -153,10 +155,12 @@ _FUNCTION_ {
         return _EOF_RET;
     }
 
+#ifndef _LIBCNT_
     if(!locale)
         locinfo = get_locinfo();
     else
         locinfo = locale->locinfo;
+#endif
 
     while (*format) {
 	/* a whitespace character in the format string causes scanf to read,
@@ -310,6 +314,7 @@ _FUNCTION_ {
             case 'f':
             case 'g':
             case 'G': { /* read a float */
+#ifndef _LIBCNT_
                     //long double cur = 1, expcnt = 10;
                     ULONGLONG d, hlp;
                     int exp = 0, negative = 0;
@@ -402,7 +407,6 @@ _FUNCTION_ {
                         else if(exp>0 && e>0 && e+exp<0) exp = INT_MAX;
                         else exp += e;
                     }
-
 #ifdef __REACTOS__
                     /* ReactOS: don't inline float processing (kernel/freeldr don't like that! */
                     _internal_handle_float(negative, exp, suppress, d, l_prefix || L_prefix, &ap);
@@ -438,6 +442,9 @@ _FUNCTION_ {
                         else _SET_NUMBER_(float);
                     }
 #endif /* __REACTOS__ */
+#else
+                (void)L_prefix;
+#endif/* !defined(_LIBCNT_) */
                 }
                 break;
 		/* According to msdn,
