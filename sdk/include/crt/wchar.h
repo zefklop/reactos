@@ -486,40 +486,6 @@ extern "C" {
 
 #endif /* !_WPROCESS_DEFINED */
 
-#ifndef _WCTYPE_INLINE_DEFINED
-#undef _CRT_WCTYPE_NOINLINE
-#if !defined(__cplusplus) || defined(_CRT_WCTYPE_NOINLINE)
-#define iswalpha(_c) (iswctype(_c,_ALPHA))
-#define iswupper(_c) (iswctype(_c,_UPPER))
-#define iswlower(_c) (iswctype(_c,_LOWER))
-#define iswdigit(_c) (iswctype(_c,_DIGIT))
-#define iswxdigit(_c) (iswctype(_c,_HEX))
-#define iswspace(_c) (iswctype(_c,_SPACE))
-#define iswpunct(_c) (iswctype(_c,_PUNCT))
-#define iswalnum(_c) (iswctype(_c,_ALPHA|_DIGIT))
-#define iswprint(_c) (iswctype(_c,_BLANK|_PUNCT|_ALPHA|_DIGIT))
-#define iswgraph(_c) (iswctype(_c,_PUNCT|_ALPHA|_DIGIT))
-#define iswcntrl(_c) (iswctype(_c,_CONTROL))
-#define iswascii(_c) ((unsigned)(_c) < 0x80)
-
-#define _iswalpha_l(_c,_p) (_iswctype_l(_c,_ALPHA,_p))
-#define _iswupper_l(_c,_p) (_iswctype_l(_c,_UPPER,_p))
-#define _iswlower_l(_c,_p) (_iswctype_l(_c,_LOWER,_p))
-#define _iswdigit_l(_c,_p) (_iswctype_l(_c,_DIGIT,_p))
-#define _iswxdigit_l(_c,_p) (_iswctype_l(_c,_HEX,_p))
-#define _iswspace_l(_c,_p) (_iswctype_l(_c,_SPACE,_p))
-#define _iswpunct_l(_c,_p) (_iswctype_l(_c,_PUNCT,_p))
-#define _iswalnum_l(_c,_p) (_iswctype_l(_c,_ALPHA|_DIGIT,_p))
-#define _iswprint_l(_c,_p) (_iswctype_l(_c,_BLANK|_PUNCT|_ALPHA|_DIGIT,_p))
-#define _iswgraph_l(_c,_p) (_iswctype_l(_c,_PUNCT|_ALPHA|_DIGIT,_p))
-#define _iswcntrl_l(_c,_p) (_iswctype_l(_c,_CONTROL,_p))
-#ifndef _CTYPE_DISABLE_MACROS
-#define isleadbyte(_c) (__PCTYPE_FUNC[(unsigned char)(_c)] & _LEADBYTE)
-#endif
-#endif
-#define _WCTYPE_INLINE_DEFINED
-#endif
-
 #if !defined(_POSIX_) || defined(__GNUC__)
 #ifndef _INO_T_DEFINED
 #define _INO_T_DEFINED

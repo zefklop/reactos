@@ -35,6 +35,12 @@ _Check_return_
 _CRTIMP
 int
 __cdecl
+iswascii(_In_ wint_t _C);
+
+_Check_return_
+_CRTIMP
+int
+__cdecl
 iswupper(_In_ wint_t _C);
 
 _Check_return_
