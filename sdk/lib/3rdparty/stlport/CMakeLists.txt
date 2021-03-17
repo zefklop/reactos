@@ -51,6 +51,8 @@ target_compile_definitions(stlport PRIVATE
     _STLP_USE_EXCEPTIONS _DLL __USE_CRTIMP
     _BUILD_STLPORT NATIVE_CPP_INCLUDE=${REACTOS_SOURCE_DIR}/sdk/include/c++)
 
+target_link_libraries(stlport PUBLIC libmsvcrt)
+
 target_include_directories(stlport INTERFACE "$<$<COMPILE_LANGUAGE:CXX>:${REACTOS_SOURCE_DIR}/sdk/include/c++/stlport>")
 target_compile_definitions(stlport INTERFACE "$<$<COMPILE_LANGUAGE:CXX>:NATIVE_CPP_INCLUDE=${REACTOS_SOURCE_DIR}/sdk/include/c++>")
 set_target_cpp_properties(stlport WITH_EXCEPTIONS WITH_RTTI)
