@@ -41,6 +41,9 @@ endif()
 # Compiler Core
 add_compile_options(-pipe -fms-extensions -fno-strict-aliasing)
 
+# Force using our version of memcpy (which is memmove)
+add_compile_options(-fno-builtin-memcpy)
+
 # Prevent GCC from searching any of the default directories.
 # The case for C++ is handled through the reactos_c++ INTERFACE library
 add_compile_options("$<$<NOT:$<COMPILE_LANGUAGE:CXX>>:-nostdinc>")
