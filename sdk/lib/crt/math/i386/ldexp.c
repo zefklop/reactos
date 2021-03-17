@@ -15,6 +15,7 @@ double ldexp (double value, int exp)
     register double result;
 #endif
 
+#ifndef _LIBCNT_
     /* Check for value correctness
      * and set errno if required
      */
@@ -22,6 +23,7 @@ double ldexp (double value, int exp)
     {
         errno = EDOM;
     }
+#endif
 
 #ifdef __GNUC__
     asm ("fscale"
