@@ -1,0 +1,18 @@
+runner:
+  gcc-warning:
+    cmd: cat ../build.log # (required)
+    errorformat: # Sometimes with relative paths, sometimes not...
+      # Error message in the current compilation unit
+      - "../src/%f:%l:%c: %t%*[^:]: %m"
+      - "%f:%l:%c: %t%*[^:]: %m"
+      # Error or warnings in included files
+      - "%+GIn file included from ../src/%f:%l%*[\\,:]"
+      - "%+GIn file included from %f:%l%*[\\,:]"
+      - "%+G                 from ../src/%f:%l%*[\\,:]"
+      - "%+G                 from %f:%l%*[\\,:]"
+
+  msvc-warning:
+    cmd: cat ../build.log
+    errorformat:
+      - "%f(%l): %t%s C%n: %m"
+

@@ -38,6 +38,9 @@ jobs:
         chmod +x llvm.sh
         sudo ./llvm.sh $LLVM_VERSION
         echo "D_CLANG_VERSION=-DCLANG_VERSION=$LLVM_VERSION" >> $GITHUB_ENV
+    - name: Setup reviewdog
+      if: ${{ github.event_name == 'pull_request' }}
+      uses: reviewdog/action-setup@v1.0.3
     - name: Source checkout
       uses: actions/checkout@v2
       with:
@@ -61,7 +64,7 @@ jobs:
     - name: Configure
       run: echo 'cmake -S ${{github.workspace}}/src -B ${{github.workspace}}/build -G Ninja -DCMAKE_TOOLCHAIN_FILE:FILEPATH=toolchain-${{matrix.compiler}}.cmake -DARCH:STRING=${{matrix.arch}} -DENABLE_CCACHE=1 -DENABLE_ROSTESTS=1 -DENABLE_ROSAPPS=1 ${{env.D_CLANG_VERSION}}' | ${{github.workspace}}/RosBE-CI/RosBE.sh . 0 ${{matrix.arch}}
     - name: Build
-      run: echo 'cmake --build ${{github.workspace}}/build -- -k0' | ${{github.workspace}}/RosBE-CI/RosBE.sh . 0 ${{matrix.arch}}
+      run: echo 'cmake --build ${{github.workspace}}/build -- -k0' | ${{github.workspace}}/RosBE-CI/RosBE.sh . 0 ${{matrix.arch}} | tee build.log
     - name: Generate ISOs
       run: echo 'cmake --build ${{github.workspace}}/build --target bootcd --target livecd' | ${{github.workspace}}/RosBE-CI/RosBE.sh . 0 ${{matrix.arch}}
     - name: Print ccache statistics
@@ -73,6 +76,13 @@ jobs:
         path: |
           build/bootcd.iso
           build/livecd.iso
+    - name: Run reviewdog check
+      if: ${{ always() && (github.event_name == 'pull_request') }}
+      env:
+        REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run:
+        reviewdog -reporter github-pr-review -conf .github/reviewdog.yml -runners gcc-warning -diff "git diff ${{github.base_ref}}" -level warning
+      working-directory: ${{github.workspace}}/src
 
   build-msvc:
     strategy:
@@ -94,6 +104,9 @@ jobs:
         echo "${{github.workspace}}\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
         echo "BISON_PKGDATADIR=${{github.workspace}}\bin\share\bison" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
         echo "M4=${{github.workspace}}\bin\m4.exe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+    - name: Setup reviewdog
+      if: ${{ (github.event_name == 'pull_request') && (matrix.toolset == '14.2') }}
+      uses: reviewdog/action-setup@v1.0.3
     - name: Activate VS cmd (x86)
       if: ${{ matrix.arch == 'i386' }}
       uses: ilammy/msvc-dev-cmd@v1
@@ -113,7 +126,7 @@ jobs:
     - name: Configure
       run: cmake -S src -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE:FILEPATH=toolchain-msvc.cmake -DARCH:STRING=${{matrix.arch}} -DENABLE_ROSTESTS=1 -DENABLE_ROSAPPS=1
     - name: Build
-      run: cmake --build build  -- -k0
+      run: cmake --build build  -- -k0 | tee build.log
     - name: Generate ISOs
       run: cmake --build build --target bootcd --target livecd
     - name: Upload ISOs
@@ -128,6 +141,13 @@ jobs:
       with:
         name: reactos-syms-msvc${{matrix.toolset}}-${{matrix.arch}}-${{github.sha}}
         path: build/msvc_pdb
+    - name: Run reviewdog check
+      if: ${{ always() && (github.event_name == 'pull_request') && (matrix.toolset == '14.2') }}
+      env:
+        REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run:
+        reviewdog -reporter github-pr-review -conf .github/reviewdog.yml -runners msvc-warning -diff "git diff ${{github.base_ref}}" -level warning
+      working-directory: ${{github.workspace}}/src
 
   build-msvc-arm:
     strategy:
