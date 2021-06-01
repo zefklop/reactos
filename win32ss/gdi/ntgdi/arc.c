@@ -3,6 +3,9 @@
 #define NDEBUG
 #include <debug.h>
 
+/* unknown pragma in MSVC. Still makes a warning ;-) */
+#pragma GCC warning "This should use Bresenham algorithms"
+
 /*
  * A couple of macros to fill a single pixel or a line
  */

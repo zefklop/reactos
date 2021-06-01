@@ -1,6 +1,9 @@
 
 #pragma once
 
+/* unknown pragma in MSVC. Still makes a warning ;-) */
+#pragma GCC warning "Test included included file"
+
 #define GDIOBJ_POOL_TAG(type) ('00hG' + (((type) & 0x1f) << 24))
 
 #define BASEOBJECT CBASEOBJECT

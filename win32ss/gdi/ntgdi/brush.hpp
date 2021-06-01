@@ -8,6 +8,7 @@
 #pragma once
 
 #include <win32k.h>
+#pragma GCC warning "Test included file"
 #include "baseobj.hpp"
 
 __prefast_operator_new_null

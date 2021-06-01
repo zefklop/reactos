@@ -7,6 +7,7 @@
  * REFERENCES:        http://support.microsoft.com/kb/kbview/108497
  */
 
+/* This comment to trigger included file */
 #include "brush.hpp"
 
 DBG_DEFAULT_CHANNEL(GdiBrush);

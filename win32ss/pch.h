@@ -30,6 +30,9 @@
 #include <ntintsafe.h>
 #include <ntddkbd.h>
 
+/* This because this makes some warnings appear on clang build */
+#include <setjmp.h>
+
 /* Win32 headers */
 /* FIXME: Defines in winbase.h that we need... */
 typedef struct _SECURITY_ATTRIBUTES SECURITY_ATTRIBUTES, *LPSECURITY_ATTRIBUTES;
